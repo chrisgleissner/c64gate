@@ -196,6 +196,14 @@ def render_caddyfile(settings: Settings) -> str:
                 }}
             }}
 
+            handle /v1/* {{
+                reverse_proxy {rest_backend} {{
+                    header_up X-Forwarded-Proto https
+                    header_up X-C64Gate true
+                    header_up X-C64Gate-Device {settings.hostname}
+                }}
+            }}
+
             handle /dashboard* {{
                 reverse_proxy 127.0.0.1:{settings.controlplane_port}
             }}

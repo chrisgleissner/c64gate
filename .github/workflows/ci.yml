@@ -91,7 +91,9 @@ jobs:
           C64GATE_IMAGE: c64gate:0.0.1
         run: |
           mkdir -p artifacts
+          docker image inspect "$C64GATE_IMAGE" --format '{{.Id}}' > artifacts/c64gate-image-amd64.image-id.txt
           docker save "$C64GATE_IMAGE" | gzip > artifacts/c64gate-image-amd64.tar.gz
+          sha256sum artifacts/c64gate-image-amd64.tar.gz > artifacts/c64gate-image-amd64.tar.gz.sha256
 
       - name: Upload image artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

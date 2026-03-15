@@ -61,7 +61,7 @@ Useful endpoints after startup:
 
 - `https://127.0.0.1:8443/health`
 - `https://127.0.0.1:8443/ready`
-- `https://127.0.0.1:8443/api/version` for the relayed device version endpoint
+- `https://127.0.0.1:8443/v1/version` for the relayed device version endpoint
 - `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
 
 Management access notes:

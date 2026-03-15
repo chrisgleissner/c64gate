@@ -11,7 +11,7 @@ This document maps findings F1-F10 from `doc/audit/security-audit.md` to the cur
 - Status: resolved
 - Evidence:
   - `src/controlplane/runtime.py` now applies nftables, supervises Caddy, ProFTPD, dumpcap, and the upgrade proxy, and marks simulation-mode dnsmasq as explicitly skipped instead of silently missing.
-  - `tests/smoke/test_image_runtime.py` now proves the image reaches readiness and serves the relayed `/api/version` endpoint over HTTPS.
+  - `tests/smoke/test_image_runtime.py` now proves the image reaches readiness and serves the relayed `/v1/version` endpoint over HTTPS.
 - Remediation:
   - implemented a supervised runtime orchestrator with mode-aware mandatory-component gating
   - fail startup when required services exit unexpectedly
@@ -110,4 +110,4 @@ This document maps findings F1-F10 from `doc/audit/security-audit.md` to the cur
 
 - Phase ordering starts with runtime enforcement and management-plane closure because those changes remove the highest-risk false sense of security.
 - Simulation mode remains supported for local exploration, but readiness now records skipped controls explicitly instead of reporting them healthy.
-- Local validation now includes `./build ci`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke`, and a final Chrome Playwright check against the relayed `https://127.0.0.1/.../api/version` path using SPKI pinning for the generated local certificate.
+- Local validation now includes `./build ci`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke`, and a final Chrome Playwright check against the relayed `https://127.0.0.1/.../v1/version` path using SPKI pinning for the generated local certificate.

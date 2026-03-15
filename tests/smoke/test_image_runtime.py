@@ -88,7 +88,7 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
             auth=("admin", "changeme"),
         ).json()
         version = httpx.get(
-            f"https://127.0.0.1:{port}/api/version",
+            f"https://127.0.0.1:{port}/v1/version",
             timeout=2.0,
             verify=False,
         ).json()

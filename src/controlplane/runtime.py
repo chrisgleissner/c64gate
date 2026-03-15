@@ -58,12 +58,13 @@ async def handle_simulated_rest_backend(
 ) -> None:
     payload = {"device": "c64u-sim", "version": "0.0.1", "transport": "https-relay"}
     body = json.dumps(payload, sort_keys=True).encode("utf-8")
+    supported_paths = {"/api/version", "/api/v1/info", "/v1/version"}
     status = b"200 OK"
     try:
         request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=2.0)
         request_line = request.splitlines()[0].decode("ascii", errors="replace")
         method, path, _ = request_line.split(" ", 2)
-        if method != "GET" or path not in {"/api/version", "/api/v1/info"}:
+        if method != "GET" or path not in supported_paths:
             status = b"404 Not Found"
             body = json.dumps({"detail": "not found"}).encode("utf-8")
     except (TimeoutError, asyncio.IncompleteReadError, ValueError):

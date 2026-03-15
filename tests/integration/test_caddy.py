@@ -19,5 +19,6 @@ def test_caddyfile_contains_https_facade_and_logging(temp_settings) -> None:
     assert "handle /health" in config
     assert "handle /ready" in config
     assert "handle /api/*" in config
+    assert "handle /v1/*" in config
     assert "handle_path /api/*" not in config
     assert "basic_auth" not in config
