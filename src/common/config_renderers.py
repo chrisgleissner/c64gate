@@ -73,7 +73,7 @@ def render_dnsmasq_config(settings: Settings) -> str:
         interface={settings.device_interface}
         bind-interfaces
         dhcp-authoritative
-        dhcp-leasefile={settings.runtime_dir}/dnsmasq.leases
+        dhcp-leasefile=/tmp/dnsmasq.leases
         dhcp-range={dhcp_start},{dhcp_end},255.255.255.0,12h
         dhcp-option=3,{settings.gateway_address}
         dhcp-option=6,{settings.gateway_address}

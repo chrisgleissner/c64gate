@@ -218,6 +218,14 @@ def test_should_start_simulated_rest_backend(tmp_path: Path) -> None:
     assert runtime.should_start_simulated_rest_backend(external) is False
 
 
+def test_mandatory_components_for_simulation(tmp_path: Path) -> None:
+    simulated = _runtime_settings(tmp_path)
+    assert "dnsmasq" not in runtime.mandatory_components_for(simulated)
+
+    secured = _runtime_settings(tmp_path / "real", simulation_mode=False)
+    assert "dnsmasq" in runtime.mandatory_components_for(secured)
+
+
 def test_can_drop_privileges_to_service_user(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -355,4 +363,4 @@ async def test_serve_orchestrates_components(
     assert "validate_auth" in calls
     assert "prepare_network" in calls
     assert "apply_nft" in calls
-    assert calls.count("stop_process") == 4
+    assert calls.count("stop_process") == 3

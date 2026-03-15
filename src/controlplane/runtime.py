@@ -40,6 +40,12 @@ MANDATORY_BINARIES = [
 MANDATORY_COMPONENTS = ["nftables", "dnsmasq", "proftpd", "dumpcap", "upgrade_proxy", "caddy"]
 
 
+def mandatory_components_for(settings: Settings) -> list[str]:
+    if settings.simulation_mode:
+        return [component for component in MANDATORY_COMPONENTS if component != "dnsmasq"]
+    return list(MANDATORY_COMPONENTS)
+
+
 def should_start_simulated_rest_backend(settings: Settings) -> bool:
     if not settings.simulation_mode:
         return False
@@ -300,9 +306,10 @@ def update_component_state(
     runtime_state: dict[str, Any], component: str, **fields: Any
 ) -> None:
     runtime_state.setdefault("components", {}).setdefault(component, {}).update(fields)
+    mandatory_components = runtime_state.get("mandatory_components", MANDATORY_COMPONENTS)
     runtime_state["ready"] = all(
         runtime_state.get("components", {}).get(name, {}).get("healthy", False)
-        for name in MANDATORY_COMPONENTS
+        for name in mandatory_components
     )
 
 
@@ -328,6 +335,7 @@ async def monitor_processes(
                 required=True,
             )
             if not healthy:
+                print(f"managed component exited: {name} status={process.poll()}", flush=True)
                 server.should_exit = True
                 return
         await asyncio.sleep(1)
@@ -344,6 +352,7 @@ async def serve() -> None:
         "ready": False,
         "metrics": {"upgrade_proxy_requests": 0},
         "components": components,
+        "mandatory_components": mandatory_components_for(settings),
     }
     apply_nftables(settings, runtime_state)
     app = create_app(settings=settings, logger=logger, runtime_state=runtime_state)
@@ -369,14 +378,25 @@ async def serve() -> None:
         required=True,
     )
 
-    dnsmasq_process = start_managed_process(
-        [
+    dnsmasq_process: subprocess.Popen[str] | None = None
+    if settings.simulation_mode:
+        update_component_state(
+            runtime_state,
             "dnsmasq",
-            "--keep-in-foreground",
-            f"--conf-file={Path(settings.config_output_dir) / 'dnsmasq.conf'}",
-        ],
-        name="dnsmasq",
-    )
+            running=False,
+            healthy=False,
+            required=False,
+            skipped=True,
+        )
+    else:
+        dnsmasq_process = start_managed_process(
+            [
+                "dnsmasq",
+                "--keep-in-foreground",
+                f"--conf-file={Path(settings.config_output_dir) / 'dnsmasq.conf'}",
+            ],
+            name="dnsmasq",
+        )
     proftpd_process = start_managed_process(
         ["proftpd", "-n", "-c", str(Path(settings.config_output_dir) / "proftpd.conf")],
         name="proftpd",
@@ -403,11 +423,12 @@ async def serve() -> None:
         extra_env={"XDG_DATA_HOME": str(settings.caddy_data_dir.parent)},
     )
     managed_processes = {
-        "dnsmasq": dnsmasq_process,
         "proftpd": proftpd_process,
         "dumpcap": dumpcap_process,
         "caddy": caddy_process,
     }
+    if dnsmasq_process is not None:
+        managed_processes["dnsmasq"] = dnsmasq_process
     for component_name in managed_processes:
         update_component_state(
             runtime_state,
