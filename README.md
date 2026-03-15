@@ -7,7 +7,7 @@ C64 Gate is a Linux gateway for Commodore 64 Ultimate devices, packaged as a sin
 It sits between the device and the rest of the network, secures inbound and outbound traffic via TLS, and gives you packet capture, structured logs, and a small control plane.
 
 > [!NOTE]
-> This project is under active development. Some documented features may not yet be fully functional.
+> This project is __EXPERIMENTAL__ and not yet fully functional.
 
 ## How Does It Work
 
@@ -93,7 +93,7 @@ docker compose up --build
 
 After that command starts successfully, the exact endpoint to hit first is:
 
-https://127.0.0.1:8443/v1/version
+<https://127.0.0.1:8443/v1/version>
 
 That is the clearest end-to-end check that the HTTPS facade is up and the relayed REST path is working. In the default Compose simulation mode, it should return JSON shaped like:
 

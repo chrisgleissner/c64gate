@@ -183,12 +183,13 @@ def render_caddyfile(settings: Settings) -> str:
                 format json
             }}
             local_certs
+            skip_install_trust
         }}
 
         {addresses} {{
             tls internal
 
-            handle /api/* {{
+            handle_path /api/* {{
                 reverse_proxy {rest_backend} {{
                     header_up X-Forwarded-Proto https
                     header_up X-C64Gate true

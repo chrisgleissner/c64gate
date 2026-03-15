@@ -1,6 +1,7 @@
 {
     admin off
     local_certs
+    skip_install_trust
 }
 
 :8443 {

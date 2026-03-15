@@ -8,6 +8,7 @@ def test_caddyfile_contains_https_facade_and_logging(temp_settings) -> None:
     assert "https_port 8443" in config
     assert "default_sni 127.0.0.1" in config
     assert "local_certs" in config
+    assert "skip_install_trust" in config
     assert "tls internal" in config
     assert "https://127.0.0.1, https://localhost" in config
     assert "reverse_proxy" in config
@@ -18,7 +19,6 @@ def test_caddyfile_contains_https_facade_and_logging(temp_settings) -> None:
     assert "X-C64Gate true" in config
     assert "handle /health" in config
     assert "handle /ready" in config
-    assert "handle /api/*" in config
+    assert "handle_path /api/*" in config
     assert "handle /v1/*" in config
-    assert "handle_path /api/*" not in config
     assert "basic_auth" not in config
