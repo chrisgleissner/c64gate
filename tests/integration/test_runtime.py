@@ -98,6 +98,27 @@ def test_ensure_runtime_layout_and_credentials(
     assert (settings.runtime_dir / "proftpd.passwd").exists()
 
 
+def test_ensure_runtime_layout_ignores_permission_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _runtime_settings(tmp_path)
+    monkeypatch.setattr(runtime.os, "geteuid", lambda: 0)
+    monkeypatch.setattr("pwd.getpwnam", lambda _: SimpleNamespace(pw_uid=123, pw_gid=456))
+
+    def raising_chown(path: Path, uid: int, gid: int) -> None:
+        raise PermissionError(path)
+
+    def raising_chmod(path: Path, mode: int) -> None:
+        raise PermissionError(path)
+
+    monkeypatch.setattr(runtime.os, "chown", raising_chown)
+    monkeypatch.setattr(runtime.os, "chmod", raising_chmod)
+    runtime.ensure_runtime_layout(settings)
+    assert settings.log_dir.exists()
+    assert settings.pcap_dir.exists()
+    assert settings.caddy_data_dir.exists()
+
+
 def test_prepare_simulation_network_updates_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -149,9 +149,15 @@ def ensure_runtime_layout(settings: Settings) -> None:
                 os.chown(path, service_uid, service_gid)
             except PermissionError:
                 pass
-    os.chmod(settings.log_dir, 0o750)
-    os.chmod(settings.pcap_dir, 0o750)
-    os.chmod(settings.caddy_data_dir, 0o700)
+    for path, mode in [
+        (settings.log_dir, 0o750),
+        (settings.pcap_dir, 0o750),
+        (settings.caddy_data_dir, 0o700),
+    ]:
+        try:
+            os.chmod(path, mode)
+        except PermissionError:
+            pass
     (Path(settings.runtime_dir) / "tls").mkdir(parents=True, exist_ok=True)
     (Path(settings.runtime_dir) / "proxy").mkdir(parents=True, exist_ok=True)
 
