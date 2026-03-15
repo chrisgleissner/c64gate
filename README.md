@@ -107,8 +107,6 @@ The most useful follow-on documents are:
 - [doc/developer.md](doc/developer.md) for local developer workflows
 - [doc/architecture.md](doc/architecture.md) for the system design and locked technology choices
 - [doc/traceability-matrix.yaml](doc/traceability-matrix.yaml) for requirement-to-code-to-test coverage
-- [PLANS.md](PLANS.md) for delivery phases and acceptance criteria
-- [WORKLOG.md](WORKLOG.md) for the implementation record
 
 ## Operating Notes
 
