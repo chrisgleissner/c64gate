@@ -112,12 +112,15 @@ docker run -d \
   --cap-drop ALL \
   --cap-add NET_ADMIN \
   --cap-add NET_RAW \
+    --cap-add SYS_CHROOT \
   --read-only \
   --tmpfs /run \
   --tmpfs /tmp \
   -e C64GATE_SIMULATION_MODE=1 \
+  -e C64GATE_FTPS_PUBLIC_HOST=127.0.0.1 \
   -e C64GATE_DASHBOARD_PASSWORD=changeme \
   -p 127.0.0.1:8443:8443 \
+  -p 127.0.0.1:30000-30009:30000-30009 \
   -v "$PWD/data/caddy:/var/lib/c64gate/caddy" \
   -v "$PWD/data/logs:/var/lib/c64gate/logs" \
   -v "$PWD/data/pcap:/var/lib/c64gate/pcap" \
@@ -166,7 +169,7 @@ Management access notes:
 - `/health`, `/ready`, and `/dashboard/*` require the configured dashboard credentials.
 - `C64GATE_DASHBOARD_PASSWORD` must be changed from `changeme` outside simulation mode or the runtime will refuse to start.
 
-If you want host port `443` instead of `8443`, set `C64GATE_HTTPS_HOST_PORT=443` before starting Compose. On rootless Docker hosts, publishing `443` may require lowering `net.ipv4.ip_unprivileged_port_start` or using a rootful Docker daemon.
+If you want host port `443` instead of `8443`, set `C64GATE_HTTPS_HOST_PORT=443` before starting Compose. On rootless Docker hosts, publishing `443` may require lowering `net.ipv4.ip_unprivileged_port_start`.
 
 For a normal `https://127.0.0.1/...` experience in Chrome without certificate warnings, use the project helper scripts:
 
@@ -177,6 +180,8 @@ C64GATE_HTTPS_HOST_PORT=443 C64GATE_REST_BACKEND_URL=http://192.168.1.167 docker
 ```
 
 This keeps Docker rootless, keeps the container itself unprivileged, and applies the minimum host changes needed for a conventional local HTTPS entry point.
+For local FTPS through the same loopback bind, keep the published passive range `30000-30009` and `C64GATE_FTPS_PUBLIC_HOST=127.0.0.1`.
+The runtime includes an internal FTPS relay so protected passive transfers work under rootless Docker without requiring a rootful daemon.
 
 Stop the stack:
 
@@ -214,7 +219,7 @@ The most useful follow-on documents are:
 - v1 is Linux only.
 - The project is designed as a router-mode gateway, not a generic cross-platform desktop app.
 - Real firewall enforcement, DHCP service, and device traffic capture are best exercised on a disposable Linux host or an isolated lab network.
-- The runtime depends on Linux networking capabilities such as `NET_ADMIN` and `NET_RAW`.
+- The runtime depends on Linux capabilities such as `NET_ADMIN`, `NET_RAW`, and `SYS_CHROOT`.
 - Strict TLS mode is available through `C64GATE_STRICT_TLS_MODE=1`; default fallback HTTP remains an exception path for compatibility and should be limited to trusted environments.
 - Telnet and other plaintext paths remain compatibility features and should not be exposed outside a trusted administrative enclave.
 

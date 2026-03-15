@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import shutil
+import socket
 import stat
 import subprocess
 from contextlib import suppress
@@ -37,7 +38,15 @@ MANDATORY_BINARIES = [
     "capinfos",
     "ip",
 ]
-MANDATORY_COMPONENTS = ["nftables", "dnsmasq", "proftpd", "dumpcap", "upgrade_proxy", "caddy"]
+MANDATORY_COMPONENTS = [
+    "nftables",
+    "dnsmasq",
+    "proftpd",
+    "ftps_port_relay",
+    "dumpcap",
+    "upgrade_proxy",
+    "caddy",
+]
 
 
 def mandatory_components_for(settings: Settings) -> list[str]:
@@ -91,6 +100,91 @@ async def start_simulated_rest_backend(settings: Settings) -> asyncio.AbstractSe
     host = split.hostname or "127.0.0.1"
     port = split.port or 80
     return await asyncio.start_server(handle_simulated_rest_backend, host=host, port=port)
+
+
+def detect_primary_ipv4_address() -> str:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        probe.connect(("1.1.1.1", 53))
+        return str(probe.getsockname()[0])
+
+
+async def _relay_streams(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    try:
+        while not reader.at_eof():
+            chunk = await reader.read(65536)
+            if not chunk:
+                break
+            writer.write(chunk)
+            await writer.drain()
+    finally:
+        writer.close()
+        with suppress(ConnectionError):
+            await writer.wait_closed()
+
+
+async def handle_tcp_relay_connection(
+    client_reader: asyncio.StreamReader,
+    client_writer: asyncio.StreamWriter,
+    target_host: str,
+    target_port: int,
+) -> None:
+    upstream_reader: asyncio.StreamReader | None = None
+    upstream_writer: asyncio.StreamWriter | None = None
+    last_error: OSError | None = None
+    for _ in range(40):
+        try:
+            upstream_reader, upstream_writer = await asyncio.open_connection(target_host, target_port)
+            break
+        except OSError as exc:
+            last_error = exc
+            await asyncio.sleep(0.05)
+    if upstream_reader is None or upstream_writer is None:
+        client_writer.close()
+        with suppress(ConnectionError):
+            await client_writer.wait_closed()
+        if last_error is not None:
+            raise last_error
+        return
+
+    upstream_task = asyncio.create_task(_relay_streams(client_reader, upstream_writer))
+    downstream_task = asyncio.create_task(_relay_streams(upstream_reader, client_writer))
+    done, pending = await asyncio.wait(
+        {upstream_task, downstream_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    for task in pending:
+        task.cancel()
+    for task in done:
+        with suppress(asyncio.CancelledError, ConnectionError):
+            await task
+
+
+async def start_tcp_relay(
+    bind_host: str,
+    bind_port: int,
+    target_host: str,
+    target_port: int,
+) -> asyncio.AbstractServer:
+    return await asyncio.start_server(
+        lambda reader, writer: handle_tcp_relay_connection(
+            reader,
+            writer,
+            target_host=target_host,
+            target_port=target_port,
+        ),
+        host=bind_host,
+        port=bind_port,
+    )
+
+
+async def start_ftps_port_relays(settings: Settings) -> list[asyncio.AbstractServer]:
+    relay_bind_host = detect_primary_ipv4_address()
+    relay_servers = [
+        await start_tcp_relay(relay_bind_host, 2121, "127.0.0.1", 2121),
+    ]
+    for port in range(settings.ftps_passive_port_start, settings.ftps_passive_port_end + 1):
+        relay_servers.append(await start_tcp_relay(relay_bind_host, port, "127.0.0.1", port))
+    return relay_servers
 
 
 def _drop_privileges_preexec() -> None:
@@ -209,16 +303,6 @@ def start_caddy_process(settings: Settings) -> tuple[subprocess.Popen[str], bool
     return start_managed_process(command, name="caddy", extra_env=extra_env), False
 
 
-def ensure_runtime_credentials(settings: Settings) -> None:
-    passwd_path = Path(settings.runtime_dir) / "proftpd.passwd"
-    if not passwd_path.exists():
-        passwd_path.write_text(
-            "proxy:$1$4m5/Bd1B$YG1n9LkB2tVx1lGzJh8qz/:1000:1000::/tmp:/usr/sbin/nologin\n",
-            encoding="utf-8",
-        )
-        os.chmod(passwd_path, 0o640)
-
-
 def run_command(command: list[str], name: str) -> None:
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -317,7 +401,6 @@ IP.1 = 127.0.0.1
 def render_runtime_configs(settings: Settings) -> dict[str, str]:
     ensure_runtime_layout(settings)
     ensure_runtime_tls_material(settings)
-    ensure_runtime_credentials(settings)
     outputs = {
         "dnsmasq.conf": render_dnsmasq_config(settings),
         "nftables.conf": render_nftables_ruleset(settings),
@@ -436,6 +519,7 @@ async def serve() -> None:
         ["proftpd", "-n", "-c", str(Path(settings.config_output_dir) / "proftpd.conf")],
         name="proftpd",
     )
+    ftps_relay_servers = await start_ftps_port_relays(settings)
     dumpcap_process = start_managed_process(
         build_capture_plan(settings).dumpcap_command,
         name="dumpcap",
@@ -458,6 +542,14 @@ async def serve() -> None:
         )
     update_component_state(
         runtime_state,
+        "ftps_port_relay",
+        running=True,
+        healthy=True,
+        required=True,
+        listener_count=len(ftps_relay_servers),
+    )
+    update_component_state(
+        runtime_state,
         "caddy",
         privilege_dropped=drop_caddy_privileges,
     )
@@ -474,11 +566,22 @@ async def serve() -> None:
         await server.serve()
     finally:
         monitor_task.cancel()
+        for relay_server in ftps_relay_servers:
+            relay_server.close()
+        for relay_server in ftps_relay_servers:
+            await relay_server.wait_closed()
         for process in managed_processes.values():
             stop_managed_process(process)
         update_component_state(
             runtime_state,
             "upgrade_proxy",
+            running=False,
+            healthy=False,
+            required=True,
+        )
+        update_component_state(
+            runtime_state,
+            "ftps_port_relay",
             running=False,
             healthy=False,
             required=True,

@@ -13,8 +13,6 @@ dist/
 build/
 artifacts/
 data/caddy/
-data/logs/*.jsonl
-data/pcap/*.pcap
-data/pcap/*.pcapng
-data/pcap/*.txt
+data/logs/
+data/pcap/
 htmlcov/

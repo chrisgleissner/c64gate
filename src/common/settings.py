@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from ipaddress import ip_network
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,6 +25,9 @@ class Settings(BaseSettings):
     rest_backend_url: str = "http://127.0.0.1:8080"
     ftp_backend_host: str = "127.0.0.1"
     ftp_backend_port: int = 21
+    ftps_public_host: str = "127.0.0.1"
+    ftps_passive_port_start: int = 30000
+    ftps_passive_port_end: int = 30009
     telnet_backend_host: str = "127.0.0.1"
     telnet_backend_port: int = 23
     tcp_stream_backend_host: str = "127.0.0.1"
@@ -62,6 +66,24 @@ class Settings(BaseSettings):
     log_redacted_headers: list[str] = Field(
         default_factory=lambda: ["authorization", "cookie", "proxy-authorization", "set-cookie"]
     )
+
+    def model_post_init(self, __context: object) -> None:
+        backend_host = self._derived_backend_host()
+        if backend_host is None:
+            return
+        if self.ftp_backend_host in {"127.0.0.1", "localhost"}:
+            self.ftp_backend_host = backend_host
+        if self.telnet_backend_host in {"127.0.0.1", "localhost"}:
+            self.telnet_backend_host = backend_host
+        if self.tcp_stream_backend_host in {"127.0.0.1", "localhost"}:
+            self.tcp_stream_backend_host = backend_host
+
+    def _derived_backend_host(self) -> str | None:
+        split = urlsplit(self.rest_backend_url)
+        host = split.hostname
+        if host in {None, "127.0.0.1", "localhost"}:
+            return None
+        return host
 
     def dashboard_password_is_weak(self) -> bool:
         return (

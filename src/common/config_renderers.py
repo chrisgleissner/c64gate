@@ -89,7 +89,13 @@ def render_dnsmasq_config(settings: Settings) -> str:
 
 def render_nftables_ruleset(settings: Settings) -> str:
     allowed_ipv4, allowed_ipv6 = _collect_allowlist(settings)
-    input_ports = ", ".join(["8443", "2121"])
+    input_ports = ", ".join(
+        [
+            "8443",
+            "2121",
+            f"{settings.ftps_passive_port_start}-{settings.ftps_passive_port_end}",
+        ]
+    )
     commodore_hosts = " ".join(settings.commodore_hostnames)
     allowed_v4_set = _render_set("allowed_v4", "ipv4_addr", allowed_ipv4)
     allowed_v6_set = _render_set("allowed_v6", "ipv6_addr", allowed_ipv6)
@@ -236,8 +242,9 @@ def render_proftpd_config(settings: Settings) -> str:
         Port 2121
         UseIPv6 off
         DefaultServer on
-        AuthOrder mod_auth_file.c
-        AuthUserFile /run/c64gate/proftpd.passwd
+        DefaultAddress localhost
+        SocketBindTight on
+        CapabilitiesEngine off
         RequireValidShell off
         TimeoutIdle 600
 
@@ -248,8 +255,13 @@ def render_proftpd_config(settings: Settings) -> str:
         TLSEngine on
         TLSProtocol TLSv1.2 TLSv1.3
         TLSRequired on
+        TLSOptions NoSessionReuseRequired
+        TLSRenegotiate required off
         TLSRSACertificateFile /run/c64gate/tls/test-cert.pem
         TLSRSACertificateKeyFile /run/c64gate/tls/test-key.pem
+        MasqueradeAddress {settings.ftps_public_host}
+        TLSMasqueradeAddress {settings.ftps_public_host}
+        PassivePorts {settings.ftps_passive_port_start} {settings.ftps_passive_port_end}
         TransferLog /var/lib/c64gate/logs/proftpd-transfer.log
         ExtendedLog /var/lib/c64gate/logs/proftpd-access.log ALL default
 
@@ -257,6 +269,7 @@ def render_proftpd_config(settings: Settings) -> str:
             ProxyEngine on
             ProxyLog /var/lib/c64gate/logs/proftpd-proxy.log
             ProxyRole reverse
+            ProxyTLSTransferProtectionPolicy clear
             ProxyTables /run/c64gate/proxy
             ProxyReverseServers ftp://{settings.ftp_backend_host}:{settings.ftp_backend_port}
         </IfModule>

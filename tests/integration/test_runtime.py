@@ -88,14 +88,12 @@ def test_ensure_runtime_layout_and_credentials(
     monkeypatch.setattr(runtime.os, "chown", lambda path, uid, gid: chowned.append(Path(path)))
     monkeypatch.setattr("pwd.getpwnam", lambda _: SimpleNamespace(pw_uid=123, pw_gid=456))
     runtime.ensure_runtime_layout(settings)
-    runtime.ensure_runtime_credentials(settings)
     assert settings.log_dir.exists()
     assert settings.caddy_data_dir.exists()
     assert (settings.runtime_dir / "tls").exists()
     assert (settings.runtime_dir / "proxy").exists()
     assert settings.log_dir in chowned
     assert settings.caddy_data_dir in chowned
-    assert (settings.runtime_dir / "proftpd.passwd").exists()
 
 
 def test_ensure_runtime_layout_ignores_permission_errors(
@@ -293,6 +291,56 @@ def test_start_caddy_process_retries_without_privilege_drop(
     assert calls[1]["drop_privileges"] is False
 
 
+def test_detect_primary_ipv4_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeSocket:
+        def __enter__(self) -> "FakeSocket":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def connect(self, address: tuple[str, int]) -> None:
+            self.address = address
+
+        def getsockname(self) -> tuple[str, int]:
+            return ("172.18.0.2", 40123)
+
+    monkeypatch.setattr(runtime.socket, "socket", lambda *args, **kwargs: FakeSocket())
+    assert runtime.detect_primary_ipv4_address() == "172.18.0.2"
+
+
+@pytest.mark.asyncio
+async def test_start_tcp_relay_forwards_bytes() -> None:
+    received: list[bytes] = []
+
+    async def handle_echo(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        data = await reader.read(1024)
+        received.append(data)
+        writer.write(data.upper())
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    target_server = await asyncio.start_server(handle_echo, host="127.0.0.1", port=0)
+    target_port = target_server.sockets[0].getsockname()[1]
+    relay_server = await runtime.start_tcp_relay("127.0.0.1", 0, "127.0.0.1", target_port)
+    relay_port = relay_server.sockets[0].getsockname()[1]
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", relay_port)
+        writer.write(b"ping")
+        await writer.drain()
+        payload = await reader.read(1024)
+        assert payload == b"PING"
+        assert received == [b"ping"]
+        writer.close()
+        await writer.wait_closed()
+    finally:
+        relay_server.close()
+        await relay_server.wait_closed()
+        target_server.close()
+        await target_server.wait_closed()
+
+
 @pytest.mark.asyncio
 async def test_simulated_rest_backend_serves_version(tmp_path: Path) -> None:
     settings = _runtime_settings(tmp_path, rest_backend_url="http://127.0.0.1:18082")
@@ -337,6 +385,17 @@ async def test_serve_orchestrates_components(
 
         async def wait_closed(self) -> None:
             return None
+
+    class FakeRelayServer:
+        def close(self) -> None:
+            return None
+
+        async def wait_closed(self) -> None:
+            return None
+
+    async def fake_start_ftps_port_relays(current: Settings) -> list[FakeRelayServer]:
+        calls.append("start_ftps_relay")
+        return [FakeRelayServer()]
 
     class FakeUpgradeProxyService:
         def __init__(
@@ -390,6 +449,7 @@ async def test_serve_orchestrates_components(
     monkeypatch.setattr(runtime, "apply_nftables", lambda current, state: calls.append("apply_nft"))
     monkeypatch.setattr(runtime, "create_app", lambda settings, logger, runtime_state: object())
     monkeypatch.setattr(runtime, "UpgradeProxyService", FakeUpgradeProxyService)
+    monkeypatch.setattr(runtime, "start_ftps_port_relays", fake_start_ftps_port_relays)
     monkeypatch.setattr(
         runtime,
         "build_capture_plan",
@@ -412,5 +472,6 @@ async def test_serve_orchestrates_components(
     await runtime.serve()
     assert "validate_auth" in calls
     assert "prepare_network" in calls
+    assert "start_ftps_relay" in calls
     assert "apply_nft" in calls
     assert calls.count("stop_process") == 3
