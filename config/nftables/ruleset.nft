@@ -1,0 +1,11 @@
+flush ruleset
+
+table inet c64gate {
+    chain input {
+        type filter hook input priority filter; policy drop;
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+}

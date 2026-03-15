@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="${ROOT_DIR}/.venv"
+PYTHON_BIN="${VENV_DIR}/bin/python"
+PIP_BIN="${VENV_DIR}/bin/pip"
+RUFF_BIN="${VENV_DIR}/bin/ruff"
+PYTEST_BIN="${VENV_DIR}/bin/pytest"
+IMAGE_NAME="${C64GATE_IMAGE:-c64gate:dev}"
+GHCR_IMAGE="${C64GATE_GHCR_IMAGE:-ghcr.io/chrisgleissner/c64gate:main}"
+
+usage() {
+  cat <<'EOF'
+Usage: ./build <command> [options]
+
+Commands:
+  help              Show this help text
+  venv              Create or refresh the local virtual environment
+  deps              Install runtime and dev dependencies into the virtual environment
+  fmt [--check]     Format the repository or check formatting
+  lint              Run static lint checks
+  test [pytest args]
+                    Run integration and unit tests
+  smoke             Build the production image and run smoke tests against it
+  hil               Run optional local hardware-in-the-loop tests against c64u
+  image             Build the production Docker image locally
+  compose-up        Start the compose runtime
+  compose-down      Stop the compose runtime
+  ci                Run local CI-equivalent validation
+  print-image       Print the selected local image tag
+  print-ghcr-image  Print the configured GHCR image reference
+
+Examples:
+  ./build venv
+  ./build fmt
+  ./build fmt --check
+  ./build test -k upgrade_proxy
+  ./build smoke
+  ./build ci
+EOF
+}
+
+ensure_venv() {
+  if [[ ! -x "${PYTHON_BIN}" ]]; then
+    "${0}" venv
+  fi
+}
+
+cmd_venv() {
+  python3 -m venv "${VENV_DIR}"
+  "${PIP_BIN}" install --upgrade pip
+  "${PIP_BIN}" install -r "${ROOT_DIR}/requirements-dev.txt"
+}
+
+cmd_deps() {
+  ensure_venv
+  "${PIP_BIN}" install -r "${ROOT_DIR}/requirements-dev.txt"
+}
+
+cmd_fmt() {
+  ensure_venv
+  if [[ "${1:-}" == "--check" ]]; then
+    "${RUFF_BIN}" format --check "${ROOT_DIR}"
+  else
+    "${RUFF_BIN}" format "${ROOT_DIR}"
+  fi
+}
+
+cmd_lint() {
+  ensure_venv
+  "${RUFF_BIN}" check "${ROOT_DIR}"
+}
+
+cmd_test() {
+  ensure_venv
+  mkdir -p "${ROOT_DIR}/artifacts"
+  "${PYTEST_BIN}" -m "not smoke and not hil" "$@"
+}
+
+cmd_image() {
+  docker build -t "${IMAGE_NAME}" "${ROOT_DIR}"
+}
+
+cmd_smoke() {
+  ensure_venv
+  cmd_image
+  "${PYTEST_BIN}" -m smoke tests/smoke --image "${IMAGE_NAME}"
+}
+
+cmd_hil() {
+  ensure_venv
+  "${PYTEST_BIN}" -m hil tests/hil "$@"
+}
+
+cmd_compose_up() {
+  docker compose up --build -d
+}
+
+cmd_compose_down() {
+  docker compose down --remove-orphans
+}
+
+cmd_ci() {
+  "${0}" fmt --check
+  "${0}" lint
+  "${0}" test
+  "${0}" smoke
+  ensure_venv
+  "${PYTHON_BIN}" "${ROOT_DIR}/tools/check_traceability.py"
+}
+
+case "${1:-help}" in
+  help|--help|-h)
+    usage
+    ;;
+  venv)
+    shift
+    cmd_venv "$@"
+    ;;
+  deps)
+    shift
+    cmd_deps "$@"
+    ;;
+  fmt)
+    shift
+    cmd_fmt "$@"
+    ;;
+  lint)
+    shift
+    cmd_lint "$@"
+    ;;
+  test)
+    shift
+    cmd_test "$@"
+    ;;
+  image)
+    shift
+    cmd_image "$@"
+    ;;
+  smoke)
+    shift
+    cmd_smoke "$@"
+    ;;
+  hil)
+    shift
+    cmd_hil "$@"
+    ;;
+  compose-up)
+    shift
+    cmd_compose_up "$@"
+    ;;
+  compose-down)
+    shift
+    cmd_compose_down "$@"
+    ;;
+  ci)
+    shift
+    cmd_ci "$@"
+    ;;
+  print-image)
+    printf '%s\n' "${IMAGE_NAME}"
+    ;;
+  print-ghcr-image)
+    printf '%s\n' "${GHCR_IMAGE}"
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

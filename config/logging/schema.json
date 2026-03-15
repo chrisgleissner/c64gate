@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "C64 Gate Canonical Log Event",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "protocol",
+    "direction",
+    "source",
+    "destination",
+    "action",
+    "decision",
+    "latency_ms",
+    "bytes_transferred",
+    "correlation_id",
+    "component"
+  ],
+  "properties": {
+    "timestamp": {"type": "string"},
+    "protocol": {"type": "string"},
+    "direction": {"type": "string"},
+    "source": {"type": "string"},
+    "destination": {"type": "string"},
+    "action": {"type": "string"},
+    "decision": {"type": "string"},
+    "latency_ms": {"type": "number"},
+    "bytes_transferred": {"type": "integer"},
+    "correlation_id": {"type": "string"},
+    "component": {"type": "string"}
+  }
+}

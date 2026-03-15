@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runner packet tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y tshark
+
+      - name: Install dependencies
+        run: ./build venv
+
+      - name: Format check
+        run: ./build fmt --check
+
+      - name: Lint
+        run: ./build lint
+
+      - name: Tests
+        run: ./build test
+
+      - name: Traceability
+        run: python3 tools/check_traceability.py
+
+      - name: Upload source artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-artifacts
+          path: |
+            artifacts/
+            data/logs/
+            data/pcap/
+
+  image-validation:
+    runs-on: ubuntu-latest
+    needs: source-validation
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Install dependencies
+        run: ./build venv
+
+      - name: Build exact production image
+        env:
+          C64GATE_IMAGE: c64gate:${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+        run: |
+          docker buildx build --platform "${{ matrix.platform }}" --load -t "$C64GATE_IMAGE" .
+
+      - name: Smoke test exact image
+        env:
+          C64GATE_IMAGE: c64gate:${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+        run: ./build smoke
+
+      - name: Upload image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-artifacts-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: |
+            artifacts/
+            data/logs/
+            data/pcap/

@@ -1,0 +1,21 @@
+{
+    admin off
+    local_certs
+}
+
+:8443 {
+    tls internal
+    handle_path /api/* {
+        reverse_proxy {$C64GATE_REST_BACKEND:127.0.0.1:8080} {
+            header_up X-Forwarded-Proto https
+            header_up X-C64Gate true
+        }
+    }
+    handle /dashboard* {
+        reverse_proxy 127.0.0.1:8081
+    }
+    log {
+        output file /var/lib/c64gate/logs/caddy-access.jsonl
+        format json
+    }
+}

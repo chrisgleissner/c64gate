@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "c64gate"
+version = "0.1.0"
+description = "C64 Gate implementation per doc/architecture.md"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+  "fastapi==0.116.1",
+  "uvicorn[standard]==0.35.0",
+  "h11==0.16.0",
+  "httpx==0.28.1",
+  "pydantic==2.11.3",
+  "pydantic-settings==2.8.1",
+  "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.5",
+  "pytest-asyncio==0.26.0",
+  "pytest-cov==6.1.1",
+  "ruff==0.11.4",
+  "scapy==2.6.1",
+  "trustme==1.2.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+  "hil: optional hardware-in-the-loop tests",
+  "smoke: production image smoke tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

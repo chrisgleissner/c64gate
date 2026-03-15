@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import shutil
+import subprocess
+from contextlib import suppress
+from pathlib import Path
+from typing import Any
+
+import uvicorn
+
+from common.config_renderers import (
+    render_caddyfile,
+    render_dnsmasq_config,
+    render_nftables_ruleset,
+    render_proftpd_config,
+)
+from common.logging import JsonLogger
+from common.settings import Settings, get_settings
+from controlplane.app import create_app
+from upgrade_proxy.service import UpgradeProxyService
+
+MANDATORY_BINARIES = ["nft", "dnsmasq", "caddy", "proftpd", "dumpcap", "tshark", "capinfos"]
+
+
+def ensure_runtime_layout(settings: Settings) -> None:
+    for path in [
+        settings.log_dir,
+        settings.pcap_dir,
+        settings.runtime_dir,
+        settings.config_output_dir,
+    ]:
+        Path(path).mkdir(parents=True, exist_ok=True)
+    (Path(settings.runtime_dir) / "tls").mkdir(parents=True, exist_ok=True)
+    (Path(settings.runtime_dir) / "proxy").mkdir(parents=True, exist_ok=True)
+
+
+def ensure_runtime_tls_material(settings: Settings) -> None:
+    tls_dir = Path(settings.runtime_dir) / "tls"
+    cert_path = tls_dir / "test-cert.pem"
+    key_path = tls_dir / "test-key.pem"
+    if cert_path.exists() and key_path.exists():
+        return
+    openssl_path = shutil.which("openssl")
+    if openssl_path is None:
+        if settings.simulation_mode:
+            cert_path.write_text("simulation-cert\n", encoding="utf-8")
+            key_path.write_text("simulation-key\n", encoding="utf-8")
+            return
+        raise RuntimeError("missing openssl for runtime TLS material generation")
+    subprocess.run(
+        [
+            openssl_path,
+            "req",
+            "-x509",
+            "-nodes",
+            "-newkey",
+            "rsa:2048",
+            "-days",
+            "365",
+            "-subj",
+            "/CN=c64gate.local",
+            "-keyout",
+            str(key_path),
+            "-out",
+            str(cert_path),
+        ],
+        check=True,
+        env={**os.environ, "RANDFILE": str(tls_dir / ".rnd")},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def render_runtime_configs(settings: Settings) -> dict[str, str]:
+    ensure_runtime_layout(settings)
+    ensure_runtime_tls_material(settings)
+    outputs = {
+        "dnsmasq.conf": render_dnsmasq_config(settings),
+        "nftables.conf": render_nftables_ruleset(settings),
+        "Caddyfile": render_caddyfile(settings),
+        "proftpd.conf": render_proftpd_config(settings),
+    }
+    for filename, content in outputs.items():
+        (Path(settings.config_output_dir) / filename).write_text(content, encoding="utf-8")
+    return outputs
+
+
+def validate_binaries(simulation_mode: bool) -> dict[str, dict[str, Any]]:
+    components: dict[str, dict[str, Any]] = {}
+    for binary in MANDATORY_BINARIES:
+        resolved = shutil.which(binary)
+        components[binary] = {"present": bool(resolved), "path": resolved, "required": True}
+        if not simulation_mode and not resolved:
+            raise RuntimeError(f"missing mandatory binary: {binary}")
+    return components
+
+
+async def serve() -> None:
+    settings = get_settings()
+    render_runtime_configs(settings)
+    components = validate_binaries(settings.simulation_mode)
+    logger = JsonLogger(Path(settings.log_dir) / "c64gate.jsonl")
+    runtime_state = {
+        "ready": True,
+        "metrics": {"upgrade_proxy_requests": 0},
+        "components": components,
+    }
+    app = create_app(settings=settings, logger=logger, runtime_state=runtime_state)
+    upgrade_proxy = UpgradeProxyService(
+        settings=settings, logger=logger, runtime_state=runtime_state
+    )
+    proxy_server = await upgrade_proxy.start()
+
+    uvicorn_config = uvicorn.Config(
+        app,
+        host=settings.controlplane_host,
+        port=settings.controlplane_port,
+        log_level="info",
+    )
+    server = uvicorn.Server(uvicorn_config)
+    try:
+        await server.serve()
+    finally:
+        proxy_server.close()
+        await proxy_server.wait_closed()
+
+
+def main() -> None:
+    with suppress(KeyboardInterrupt):
+        asyncio.run(serve())
+
+
+if __name__ == "__main__":
+    main()

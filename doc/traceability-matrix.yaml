@@ -1,0 +1,209 @@
+requirements:
+  - id: REQ-001
+    section: "1"
+    requirement: "The implementation targets Linux only for v1."
+    implementation:
+      - README.md
+      - doc/developer.md
+      - .github/workflows/ci.yml
+    tests:
+      - tests/integration/test_traceability.py::test_linux_only_scope_documented
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-002
+    section: "3.1"
+    requirement: "The base runtime uses Debian stable slim and the root build Bash script is the build entry point."
+    implementation:
+      - Dockerfile
+      - build
+    tests:
+      - tests/integration/test_traceability.py::test_build_entry_point_declared
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-003
+    section: "3.2"
+    requirement: "Firewall and routing policy use nftables with default deny, RFC1918 blocking, host blocking, allowlist support, and full decision logging."
+    implementation:
+      - src/common/config_renderers.py
+      - src/log_normalizer/adapters.py
+    tests:
+      - tests/integration/test_firewall.py::test_nftables_ruleset_contains_required_policy
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-004
+    section: "3.3"
+    requirement: "dnsmasq provides authoritative DHCP, local hostname support, and passive DNS observability only."
+    implementation:
+      - src/common/config_renderers.py
+      - src/controlplane/app.py
+    tests:
+      - tests/integration/test_dhcp_and_dns.py::test_dnsmasq_configuration_contains_dhcp_and_local_name
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-005
+    section: "3.4"
+    requirement: "Caddy is sourced from the official upstream binary at 2.11.2 or later and fronts the REST API and dashboard with JSON logging."
+    implementation:
+      - Dockerfile
+      - config/caddy/Caddyfile
+      - src/common/config_renderers.py
+    tests:
+      - tests/integration/test_caddy.py::test_caddyfile_contains_https_facade_and_logging
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-006
+    section: "3.5"
+    requirement: "ProFTPD with mod_tls and mod_proxy provides the FTPS facade and connection logging."
+    implementation:
+      - config/proftpd/proftpd.conf.tpl
+      - src/common/config_renderers.py
+      - src/log_normalizer/adapters.py
+    tests:
+      - tests/integration/test_ftps.py::test_proftpd_configuration_contains_tls_and_proxy
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-007
+    section: "3.6"
+    requirement: "The outbound HTTP upgrade engine is a custom Python service using h11 and httpx with HTTPS-first behavior, cache, strict TLS mode, and fallback warnings."
+    implementation:
+      - src/upgrade_proxy/service.py
+      - src/upgrade_proxy/cache.py
+    tests:
+      - tests/integration/test_upgrade_proxy.py::test_upgrade_proxy_https_first_and_cache
+      - tests/integration/test_upgrade_proxy.py::test_upgrade_proxy_http_fallback_when_not_strict
+      - tests/integration/test_upgrade_proxy.py::test_upgrade_proxy_strict_mode_blocks_fallback
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-008
+    section: "3.7"
+    requirement: "Packet capture uses dumpcap with tshark and capinfos for inspection and assertions."
+    implementation:
+      - Dockerfile
+      - src/controlplane/runtime.py
+      - src/common/capture.py
+    tests:
+      - tests/integration/test_capture.py::test_capture_plan_uses_dumpcap_tshark_and_capinfos
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-009
+    section: "3.8"
+    requirement: "The dashboard, health, and control plane are implemented with FastAPI and Uvicorn with authenticated access."
+    implementation:
+      - src/controlplane/app.py
+      - src/controlplane/auth.py
+    tests:
+      - tests/integration/test_controlplane.py::test_dashboard_requires_basic_auth
+      - tests/integration/test_controlplane.py::test_health_and_readiness
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-010
+    section: "3.9"
+    requirement: "All logs are unified into canonical JSON lines with adapters for daemon-originated events."
+    implementation:
+      - src/common/logging.py
+      - src/log_normalizer/adapters.py
+    tests:
+      - tests/integration/test_logging.py::test_canonical_log_event_shape
+      - tests/integration/test_logging.py::test_daemon_logs_are_normalized
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-011
+    section: "6"
+    requirement: "Router mode is mandatory and interfaces and subnets remain configurable."
+    implementation:
+      - src/common/settings.py
+      - docker-compose.yml
+    tests:
+      - tests/integration/test_settings.py::test_network_settings_are_configurable
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-012
+    section: "7.1"
+    requirement: "Inbound REST and FTP are secured, while Telnet and TCP streams pass through unchanged but are logged."
+    implementation:
+      - src/controlplane/app.py
+      - src/log_normalizer/adapters.py
+    tests:
+      - tests/integration/test_stream_logging.py::test_stream_logging_modes
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-013
+    section: "7.2"
+    requirement: "Outbound HTTP is upgraded to HTTPS when possible and UDP is passed through unchanged with summary logging by default."
+    implementation:
+      - src/upgrade_proxy/service.py
+      - src/controlplane/app.py
+    tests:
+      - tests/integration/test_upgrade_proxy.py::test_upgrade_proxy_https_first_and_cache
+      - tests/integration/test_stream_logging.py::test_udp_summary_logging_default
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-014
+    section: "8.6"
+    requirement: "Capture all device traffic with PCAP output and rotation by size and time, and verify packet contents in tests."
+    implementation:
+      - src/common/capture.py
+      - src/controlplane/runtime.py
+    tests:
+      - tests/integration/test_capture.py::test_capture_rotation_plan
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-015
+    section: "8.8"
+    requirement: "Canonical logs contain timestamp, protocol, direction, source, destination, action, decision, latency, bytes, and correlation identifier, with optional verbose fields."
+    implementation:
+      - src/common/logging.py
+    tests:
+      - tests/integration/test_logging.py::test_canonical_log_event_shape
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-016
+    section: "10"
+    requirement: "The system ships as one production Docker image supporting linux/amd64 and linux/arm64 and avoids privileged mode where possible."
+    implementation:
+      - Dockerfile
+      - .github/workflows/ci.yml
+      - docker-compose.yml
+    tests:
+      - tests/smoke/test_image_runtime.py::test_image_metadata_and_smoke_runtime
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-017
+    section: "11"
+    requirement: "The root build script is the single entry point for build, test, smoke, and CI-like validation with idiomatic help."
+    implementation:
+      - build
+    tests:
+      - tests/integration/test_build_script.py::test_build_help
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-018
+    section: "12"
+    requirement: "CI validates firewall, HTTPS, FTPS, HTTP upgrade, strict TLS, packet capture, JSON logging, dashboard availability, health/readiness, and traceability coverage, and uploads artifacts."
+    implementation:
+      - .github/workflows/ci.yml
+      - build
+    tests:
+      - tests/integration/test_traceability.py::test_traceability_rows_are_complete
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-019
+    section: "12.2"
+    requirement: "Optional local HIL tests target c64u and remain non-destructive and local-only."
+    implementation:
+      - tests/hil/test_c64u_hil.py
+      - build
+    tests:
+      - tests/hil/test_c64u_hil.py::test_hil_placeholder_guard
+    ci:
+      - .github/workflows/ci.yml
+  - id: REQ-020
+    section: "17"
+    requirement: "Traceability matrix maps requirements to implementation, tests, and CI validation and is enforced in CI."
+    implementation:
+      - doc/traceability-matrix.yaml
+      - tools/check_traceability.py
+    tests:
+      - tests/integration/test_traceability.py::test_traceability_rows_are_complete
+    ci:
+      - .github/workflows/ci.yml
