@@ -2,7 +2,9 @@
 
 # C64 Gate
 
-C64 Gate is a Linux gateway for Commodore 64 Ultimate devices, packaged as a single Docker image. It sits between the device and the rest of the network, tightens inbound and outbound traffic handling, and gives you packet capture, structured logs, and a small control plane without requiring a pile of separate services.
+C64 Gate is a Linux gateway for Commodore 64 Ultimate devices, packaged as a single Docker image. 
+
+It sits between the device and the rest of the network, tightens inbound and outbound traffic handling, and gives you packet capture, structured logs, and a small control plane without requiring a pile of separate services.
 
 The implementation follows [doc/architecture.md](doc/architecture.md). If you want the full system contract, read that file. If you want to get the container running and see what it does, start here.
 
