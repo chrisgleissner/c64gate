@@ -95,6 +95,7 @@ def render_caddyfile(settings: Settings) -> str:
         {{
             admin off
             https_port 8443
+            default_sni 127.0.0.1
             log {{
                 output file {settings.log_dir}/caddy-access.jsonl
                 format json

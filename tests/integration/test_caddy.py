@@ -6,6 +6,7 @@ from common.config_renderers import render_caddyfile
 def test_caddyfile_contains_https_facade_and_logging(temp_settings) -> None:
     config = render_caddyfile(temp_settings)
     assert "https_port 8443" in config
+    assert "default_sni 127.0.0.1" in config
     assert "local_certs" in config
     assert "tls internal" in config
     assert "https://127.0.0.1, https://localhost" in config
