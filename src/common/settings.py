@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ipaddress import ip_network
 from functools import lru_cache
 from pathlib import Path
 
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     caddy_version: str = "2.11.2"
     dashboard_user: str = "admin"
     dashboard_password: str = "changeme"
-    controlplane_host: str = "0.0.0.0"
+    controlplane_host: str = "127.0.0.1"
     controlplane_port: int = 8081
     upgrade_proxy_host: str = "0.0.0.0"
     upgrade_proxy_port: int = 18080
@@ -52,6 +53,23 @@ class Settings(BaseSettings):
     capture_rotation_seconds: int = 300
     capture_rotation_megabytes: int = 10
     capture_ring_files: int = 5
+    proxy_client_header_timeout_seconds: float = 5.0
+    proxy_client_body_timeout_seconds: float = 5.0
+    proxy_max_header_bytes: int = 16384
+    proxy_max_body_bytes: int = 1048576
+    log_rotation_bytes: int = 1048576
+    log_backup_count: int = 5
+    log_redacted_headers: list[str] = Field(
+        default_factory=lambda: ["authorization", "cookie", "proxy-authorization", "set-cookie"]
+    )
+
+    def dashboard_password_is_weak(self) -> bool:
+        return self.dashboard_password in {"", "changeme", "password", "admin"} or len(
+            self.dashboard_password
+        ) < 12
+
+    def device_subnet_prefixlen(self) -> int:
+        return int(ip_network(self.device_subnet, strict=False).prefixlen)
 
 
 @lru_cache(maxsize=1)

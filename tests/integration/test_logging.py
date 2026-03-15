@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from common.logging import CanonicalLogEvent, JsonLogger
+from common.settings import Settings
 from log_normalizer.adapters import (
     normalize_caddy_log,
     normalize_nftables_log,
@@ -49,3 +50,33 @@ def test_daemon_logs_are_normalized() -> None:
     assert caddy_event.component == "caddy"
     assert proftpd_event.protocol == "ftps"
     assert nft_event.decision == "blocked"
+
+
+def test_logger_redacts_sensitive_headers_and_rotates(tmp_path: Path) -> None:
+    settings = Settings(
+        log_dir=tmp_path,
+        pcap_dir=tmp_path / "pcap",
+        runtime_dir=tmp_path / "run",
+        config_output_dir=tmp_path / "run/config",
+        log_rotation_bytes=200,
+        log_backup_count=2,
+        simulation_mode=True,
+    )
+    logger = JsonLogger(tmp_path / "log.jsonl", settings=settings)
+    for index in range(4):
+        logger.emit(
+            CanonicalLogEvent(
+                protocol="https",
+                direction="inbound",
+                source="127.0.0.1",
+                destination="c64gate.local",
+                action=f"event-{index}",
+                decision="granted",
+                latency_ms=1.0,
+                bytes_transferred=32,
+                component="caddy",
+                headers={"authorization": "secret", "x-test": "visible"},
+            )
+        )
+    assert logger.read_recent(1)[0]["headers"]["authorization"] == "[REDACTED]"
+    assert (tmp_path / "log.jsonl.1").exists()

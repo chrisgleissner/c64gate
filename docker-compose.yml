@@ -13,13 +13,22 @@ services:
       C64GATE_DASHBOARD_USER: ${C64GATE_DASHBOARD_USER:-admin}
       C64GATE_DASHBOARD_PASSWORD: ${C64GATE_DASHBOARD_PASSWORD:-changeme}
       C64GATE_SIMULATION_MODE: ${C64GATE_SIMULATION_MODE:-1}
+      C64GATE_CONTROLPLANE_HOST: 127.0.0.1
+      C64GATE_STRICT_TLS_MODE: ${C64GATE_STRICT_TLS_MODE:-0}
+    cap_drop:
+      - ALL
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /run
+      - /tmp
     ports:
-      - "${C64GATE_HTTPS_HOST_PORT:-8443}:8443"
-      - "2121:2121"
-      - "8081:8081"
+      - "${C64GATE_BIND_ADDRESS:-127.0.0.1}:${C64GATE_HTTPS_HOST_PORT:-8443}:8443"
+      - "${C64GATE_BIND_ADDRESS:-127.0.0.1}:2121:2121"
     volumes:
       - ./data/caddy:/var/lib/c64gate/caddy
       - ./data/logs:/var/lib/c64gate/logs

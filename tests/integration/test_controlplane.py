@@ -40,7 +40,9 @@ def test_health_and_readiness(temp_settings) -> None:
         runtime_state={"ready": True, "components": {"caddy": {"present": True}}, "metrics": {}},
     )
     client = TestClient(app)
-    assert client.get("/health").json()["status"] == "ok"
-    ready = client.get("/ready").json()
+    assert client.get("/health").status_code == 401
+    health = client.get("/health", auth=(temp_settings.dashboard_user, temp_settings.dashboard_password))
+    assert health.json()["status"] == "ok"
+    ready = client.get("/ready", auth=(temp_settings.dashboard_user, temp_settings.dashboard_password)).json()
     assert ready["status"] == "ready"
     assert "capture" in ready

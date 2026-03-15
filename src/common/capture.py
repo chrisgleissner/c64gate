@@ -13,6 +13,15 @@ class CapturePlan:
     capinfos_command: list[str]
 
 
+@dataclass(slots=True)
+class CapturePlanSummary:
+    interface: str
+    rotation_seconds: int
+    rotation_megabytes: int
+    ring_files: int
+    output_path: str
+
+
 def build_capture_plan(settings: Settings) -> CapturePlan:
     pcap_path = Path(settings.pcap_dir) / "device-capture.pcapng"
     return CapturePlan(
@@ -31,4 +40,15 @@ def build_capture_plan(settings: Settings) -> CapturePlan:
         ],
         tshark_summary_command=["tshark", "-r", str(pcap_path), "-T", "json"],
         capinfos_command=["capinfos", str(pcap_path)],
+    )
+
+
+def summarize_capture_plan(settings: Settings) -> CapturePlanSummary:
+    pcap_path = Path(settings.pcap_dir) / "device-capture.pcapng"
+    return CapturePlanSummary(
+        interface=settings.capture_interface,
+        rotation_seconds=settings.capture_rotation_seconds,
+        rotation_megabytes=settings.capture_rotation_megabytes,
+        ring_files=settings.capture_ring_files,
+        output_path=str(pcap_path),
     )

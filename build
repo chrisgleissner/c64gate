@@ -75,7 +75,13 @@ cmd_lint() {
 cmd_test() {
   ensure_venv
   mkdir -p "${ROOT_DIR}/artifacts"
-  "${PYTEST_BIN}" -m "not smoke and not hil" "$@"
+  "${PYTEST_BIN}" \
+    --cov=src \
+    --cov-report=term-missing:skip-covered \
+    --cov-report=xml:"${ROOT_DIR}/artifacts/coverage.xml" \
+    --cov-fail-under=80 \
+    -m "not smoke and not hil" \
+    "$@"
 }
 
 cmd_image() {

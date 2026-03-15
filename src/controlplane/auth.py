@@ -24,3 +24,12 @@ def authenticate(settings: Settings):
         return credentials.username
 
     return dependency
+
+
+def validate_management_auth(settings: Settings) -> None:
+    if settings.simulation_mode:
+        return
+    if settings.dashboard_password_is_weak():
+        raise RuntimeError(
+            "refusing to start with a weak dashboard password outside simulation mode"
+        )

@@ -24,12 +24,19 @@ class ParsedRequest:
     body: bytes
 
 
+class ProxyRequestError(Exception):
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.message = message
+
+
 def _parse_request(data: bytes) -> ParsedRequest:
     conn = h11.Connection(h11.SERVER)
     conn.receive_data(data)
     event = conn.next_event()
     if not isinstance(event, h11.Request):
-        raise ValueError("expected HTTP request")
+        raise ProxyRequestError(400, "expected HTTP request")
     body = bytearray()
     while True:
         next_event = conn.next_event()
@@ -85,16 +92,18 @@ class UpgradeProxyService:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         started = perf_counter()
-        data = await reader.readuntil(b"\r\n\r\n")
-        request = _parse_request(data)
-        host, https_url, http_url = self._resolve_urls(request)
-        cache_key = host
-        cached = self.cache.get(cache_key)
-        warnings: list[str] = []
-
         response: httpx.Response | None = None
         decision = "granted"
         action = "https-upgrade"
+        warnings: list[str] = []
+        try:
+            request = await self._read_request(reader)
+        except ProxyRequestError as exc:
+            await self._write_error(writer, exc.status_code, exc.message)
+            return
+        host, https_url, http_url = self._resolve_urls(request)
+        cache_key = host
+        cached = self.cache.get(cache_key)
         try:
             if cached is None or cached.mode == "https":
                 response = await self._send_upstream(request, https_url)
@@ -143,6 +152,47 @@ class UpgradeProxyService:
         )
 
         await self._write_response(writer, response, decision)
+
+    async def _read_request(self, reader: asyncio.StreamReader) -> ParsedRequest:
+        buffer = bytearray()
+        while b"\r\n\r\n" not in buffer:
+            if len(buffer) >= self.settings.proxy_max_header_bytes:
+                raise ProxyRequestError(431, "request headers too large")
+            try:
+                chunk = await asyncio.wait_for(reader.read(1024), timeout=self.settings.proxy_client_header_timeout_seconds)
+            except TimeoutError as exc:
+                raise ProxyRequestError(408, "request header timeout") from exc
+            if not chunk:
+                raise ProxyRequestError(400, "incomplete request headers")
+            buffer.extend(chunk)
+            if len(buffer) > self.settings.proxy_max_header_bytes:
+                raise ProxyRequestError(431, "request headers too large")
+        header_bytes, body_remainder = buffer.split(b"\r\n\r\n", 1)
+        request = _parse_request(header_bytes + b"\r\n\r\n")
+        transfer_encoding = request.headers.get("transfer-encoding")
+        if transfer_encoding is not None:
+            raise ProxyRequestError(501, "transfer-encoding is not supported")
+        content_length_header = request.headers.get("content-length", "0")
+        try:
+            content_length = int(content_length_header)
+        except ValueError as exc:
+            raise ProxyRequestError(400, "invalid content-length") from exc
+        if content_length > self.settings.proxy_max_body_bytes:
+            raise ProxyRequestError(413, "request body too large")
+        body = bytearray(body_remainder)
+        while len(body) < content_length:
+            try:
+                chunk = await asyncio.wait_for(
+                    reader.read(min(65536, content_length - len(body))),
+                    timeout=self.settings.proxy_client_body_timeout_seconds,
+                )
+            except TimeoutError as exc:
+                raise ProxyRequestError(408, "request body timeout") from exc
+            if not chunk:
+                raise ProxyRequestError(400, "incomplete request body")
+            body.extend(chunk)
+        request.body = bytes(body[:content_length])
+        return request
 
     async def _send_upstream(self, request: ParsedRequest, url: str) -> httpx.Response:
         headers = {key: value for key, value in request.headers.items() if key != "host"}
@@ -199,6 +249,31 @@ class UpgradeProxyService:
                     conn.send(h11.EndOfMessage()),
                 ]
             )
+        writer.write(data)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    async def _write_error(
+        self, writer: asyncio.StreamWriter, status_code: int, message: str
+    ) -> None:
+        conn = h11.Connection(h11.SERVER)
+        payload = message.encode("utf-8")
+        data = b"".join(
+            [
+                conn.send(
+                    h11.Response(
+                        status_code=status_code,
+                        headers=[
+                            (b"content-length", str(len(payload)).encode("ascii")),
+                            (b"content-type", b"text/plain"),
+                        ],
+                    )
+                ),
+                conn.send(h11.Data(data=payload)),
+                conn.send(h11.EndOfMessage()),
+            ]
+        )
         writer.write(data)
         await writer.drain()
         writer.close()

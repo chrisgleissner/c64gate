@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI
 
-from common.capture import build_capture_plan
+from common.capture import summarize_capture_plan
 from common.logging import JsonLogger
 from common.settings import Settings, get_settings
 from controlplane.auth import authenticate
@@ -30,30 +30,31 @@ def create_app(
     runtime_state: dict[str, Any] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
-    logger = logger or JsonLogger(Path(settings.log_dir) / "c64gate.jsonl")
+    logger = logger or JsonLogger(Path(settings.log_dir) / "c64gate.jsonl", settings=settings)
     state = (
         runtime_state
         if runtime_state is not None
         else {"ready": True, "metrics": {}, "components": {}}
     )
+    auth = Depends(authenticate(settings))
 
     app = FastAPI(title="C64 Gate Control Plane", version="0.1.0")
 
     @app.get("/health")
-    async def health() -> dict[str, Any]:
+    async def health(_: str = auth) -> dict[str, Any]:
         return {"status": "ok", "component": "controlplane"}
 
     @app.get("/ready")
-    async def ready() -> dict[str, Any]:
+    async def ready(_: str = auth) -> dict[str, Any]:
         return {
             "status": "ready" if state.get("ready", False) else "not-ready",
             "components": state.get("components", {}),
             "metrics": state.get("metrics", {}),
-            "capture": asdict(build_capture_plan(settings)),
+            "capture": asdict(summarize_capture_plan(settings)),
         }
 
     @app.get("/dashboard/summary")
-    async def dashboard_summary(_: str = Depends(authenticate(settings))) -> dict[str, Any]:
+    async def dashboard_summary(_: str = auth) -> dict[str, Any]:
         summary = _load_recent_summary(logger)
         summary["strict_tls_mode"] = settings.strict_tls_mode
         summary["verbose_logging"] = settings.verbose_logging
@@ -61,11 +62,11 @@ def create_app(
         return summary
 
     @app.get("/dashboard/flows/recent")
-    async def recent_flows(_: str = Depends(authenticate(settings))) -> dict[str, Any]:
+    async def recent_flows(_: str = auth) -> dict[str, Any]:
         return {"flows": logger.read_recent(limit=50)}
 
     @app.get("/dashboard/spec")
-    async def spec_status(_: str = Depends(authenticate(settings))) -> dict[str, Any]:
+    async def spec_status(_: str = auth) -> dict[str, Any]:
         return {
             "traceability_matrix": "doc/traceability-matrix.yaml",
             "simulation_mode": settings.simulation_mode,

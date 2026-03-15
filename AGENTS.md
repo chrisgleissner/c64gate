@@ -56,6 +56,11 @@ When relevant, update these alongside code changes:
 
 Use the narrowest useful validation first, then broader checks as needed.
 
+Coverage requirement:
+
+- Python test coverage must exceed 80% on every standard build validation run.
+- The enforced coverage gate lives on the root [build](build) test path and therefore applies to `./build test` and `./build ci`.
+
 Common commands:
 
 ```bash
@@ -70,6 +75,7 @@ python3 tools/check_traceability.py
 Notes:
 
 - `./build test` is the main Python test path.
+- `./build test` must fail if total Python coverage is 80% or lower.
 - `./build smoke` validates the production image.
 - `./build ci` is the local CI-equivalent workflow.
 - Some capture assertions depend on host tools such as `tshark` and `capinfos`.
