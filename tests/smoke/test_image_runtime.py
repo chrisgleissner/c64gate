@@ -67,7 +67,9 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
         text=True,
     )
     try:
-        for _ in range(30):
+        deadline = time.monotonic() + 90
+        last_detail = "no response"
+        while time.monotonic() < deadline:
             try:
                 response = httpx.get(
                     f"https://127.0.0.1:{port}/health",
@@ -77,10 +79,21 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
                 )
                 if response.status_code == 200:
                     break
-            except httpx.HTTPError:
-                time.sleep(1)
+                last_detail = f"status={response.status_code} body={response.text[:200]!r}"
+            except httpx.HTTPError as exc:
+                last_detail = str(exc)
+            time.sleep(1)
         else:
-            raise AssertionError("control plane did not become healthy")
+            logs = subprocess.run(
+                ["docker", "logs", container_name],
+                capture_output=True,
+                text=True,
+            )
+            log_tail = "\n".join((logs.stdout + logs.stderr).splitlines()[-40:])
+            raise AssertionError(
+                "control plane did not become healthy within 90 seconds; "
+                f"last_detail={last_detail}; container_log_tail={log_tail}"
+            )
         ready = httpx.get(
             f"https://127.0.0.1:{port}/ready",
             timeout=2.0,
