@@ -26,6 +26,7 @@ The local virtual environment and the production image both install Python depen
 - `./build lint`: run Ruff
 - `./build test`: run the Python test suite with an enforced total coverage gate above 80% and write `artifacts/coverage.xml`
 - `./build smoke`: build the production image and run smoke validation against that image
+- `./build smoke --skip-build`: run smoke validation against an existing image tag from `C64GATE_IMAGE`
 - `./build hil`: run optional hardware-in-the-loop tests against `c64u`
 - `./build image`: build the production Docker image locally
 - `./build ci`: run the local CI-equivalent workflow

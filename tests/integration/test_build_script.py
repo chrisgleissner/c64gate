@@ -11,4 +11,5 @@ def test_build_help() -> None:
     )
     assert "Usage: ./build <command>" in result.stdout
     assert "smoke" in result.stdout
+    assert "--skip-build" in result.stdout
     assert "ci" in result.stdout

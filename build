@@ -22,7 +22,9 @@ Commands:
   lint              Run static lint checks
   test [pytest args]
                     Run integration and unit tests
-  smoke             Build the production image and run smoke tests against it
+  smoke [--skip-build]
+                    Build the production image and run smoke tests against it,
+                    or validate an existing image tag when --skip-build is set
   hil               Run optional local hardware-in-the-loop tests against c64u
   image             Build the production Docker image locally
   compose-up        Start the compose runtime
@@ -37,6 +39,7 @@ Examples:
   ./build fmt --check
   ./build test -k upgrade_proxy
   ./build smoke
+  C64GATE_IMAGE=c64gate:0.0.1 ./build smoke --skip-build
   ./build ci
 EOF
 }
@@ -90,7 +93,14 @@ cmd_image() {
 
 cmd_smoke() {
   ensure_venv
-  cmd_image
+  local skip_build=0
+  if [[ "${1:-}" == "--skip-build" ]]; then
+    skip_build=1
+    shift
+  fi
+  if [[ "${skip_build}" -eq 0 ]]; then
+    cmd_image
+  fi
   "${PYTEST_BIN}" -m smoke tests/smoke --image "${IMAGE_NAME}"
 }
 

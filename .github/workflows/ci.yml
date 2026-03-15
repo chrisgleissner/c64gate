@@ -40,7 +40,7 @@ jobs:
       #     fail_ci_if_error: true
 
       - name: Traceability
-        run: python3 tools/check_traceability.py
+        run: ./.venv/bin/python tools/check_traceability.py
 
       - name: Upload source artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -83,7 +83,15 @@ jobs:
       - name: Smoke test exact image
         env:
           C64GATE_IMAGE: c64gate:0.0.1
-        run: ./build smoke
+        run: ./build smoke --skip-build
+
+      - name: Export exact image artifact
+        if: matrix.platform == 'linux/amd64'
+        env:
+          C64GATE_IMAGE: c64gate:0.0.1
+        run: |
+          mkdir -p artifacts
+          docker save "$C64GATE_IMAGE" | gzip > artifacts/c64gate-image-amd64.tar.gz
 
       - name: Upload image artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

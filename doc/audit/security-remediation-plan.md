@@ -110,4 +110,4 @@ This document maps findings F1-F10 from `doc/audit/security-audit.md` to the cur
 
 - Phase ordering starts with runtime enforcement and management-plane closure because those changes remove the highest-risk false sense of security.
 - Simulation mode remains supported for local exploration, but readiness now records skipped controls explicitly instead of reporting them healthy.
-- Local validation now includes `./build ci`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke`, and a final Chrome trust check against the relayed `https://127.0.0.1/.../api/version` path.
+- Local validation now includes `./build ci`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke`, and a final Chrome Playwright check against the relayed `https://127.0.0.1/.../api/version` path using SPKI pinning for the generated local certificate.
