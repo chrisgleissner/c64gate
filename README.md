@@ -20,6 +20,8 @@ It sits between the device and the rest of the network, secures inbound and outb
 - Canonical JSON logs for traffic and daemon events
 - A small FastAPI control plane for health, readiness, and dashboard views
 
+More information is available in the [Architecture](./doc/architecture.md] document.
+
 ## Good First Outcome
 
 If you only want a quick proof that the project works, the shortest useful path is:
