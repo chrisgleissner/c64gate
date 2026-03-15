@@ -179,6 +179,36 @@ def can_drop_privileges_to_service_user(*paths: Path) -> bool:
     return True
 
 
+def start_caddy_process(settings: Settings) -> tuple[subprocess.Popen[str], bool]:
+    command = [
+        "caddy",
+        "run",
+        "--config",
+        str(Path(settings.config_output_dir) / "Caddyfile"),
+        "--adapter",
+        "caddyfile",
+    ]
+    extra_env = {"XDG_DATA_HOME": str(settings.caddy_data_dir.parent)}
+    drop_caddy_privileges = can_drop_privileges_to_service_user(
+        settings.log_dir,
+        settings.caddy_data_dir,
+    )
+    if drop_caddy_privileges:
+        try:
+            return (
+                start_managed_process(
+                    command,
+                    name="caddy",
+                    drop_privileges=True,
+                    extra_env=extra_env,
+                ),
+                True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return start_managed_process(command, name="caddy", extra_env=extra_env), False
+
+
 def ensure_runtime_credentials(settings: Settings) -> None:
     passwd_path = Path(settings.runtime_dir) / "proftpd.passwd"
     if not passwd_path.exists():
@@ -410,23 +440,7 @@ async def serve() -> None:
         build_capture_plan(settings).dumpcap_command,
         name="dumpcap",
     )
-    drop_caddy_privileges = can_drop_privileges_to_service_user(
-        settings.log_dir,
-        settings.caddy_data_dir,
-    )
-    caddy_process = start_managed_process(
-        [
-            "caddy",
-            "run",
-            "--config",
-            str(Path(settings.config_output_dir) / "Caddyfile"),
-            "--adapter",
-            "caddyfile",
-        ],
-        name="caddy",
-        drop_privileges=drop_caddy_privileges,
-        extra_env={"XDG_DATA_HOME": str(settings.caddy_data_dir.parent)},
-    )
+    caddy_process, drop_caddy_privileges = start_caddy_process(settings)
     managed_processes = {
         "proftpd": proftpd_process,
         "dumpcap": dumpcap_process,

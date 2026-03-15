@@ -260,6 +260,39 @@ def test_can_drop_privileges_to_service_user(
     assert runtime.can_drop_privileges_to_service_user(writable) is False
 
 
+def test_start_caddy_process_retries_without_privilege_drop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _runtime_settings(tmp_path)
+    calls: list[dict[str, object]] = []
+
+    def fake_start_managed_process(
+        command: list[str],
+        name: str,
+        drop_privileges: bool = False,
+        extra_env: dict[str, str] | None = None,
+    ) -> FakeProcess:
+        calls.append(
+            {
+                "command": command,
+                "name": name,
+                "drop_privileges": drop_privileges,
+                "extra_env": extra_env,
+            }
+        )
+        if drop_privileges:
+            raise subprocess.SubprocessError("preexec failed")
+        return FakeProcess()
+
+    monkeypatch.setattr(runtime, "can_drop_privileges_to_service_user", lambda *args: True)
+    monkeypatch.setattr(runtime, "start_managed_process", fake_start_managed_process)
+    process, privilege_dropped = runtime.start_caddy_process(settings)
+    assert isinstance(process, FakeProcess)
+    assert privilege_dropped is False
+    assert calls[0]["drop_privileges"] is True
+    assert calls[1]["drop_privileges"] is False
+
+
 @pytest.mark.asyncio
 async def test_simulated_rest_backend_serves_version(tmp_path: Path) -> None:
     settings = _runtime_settings(tmp_path, rest_backend_url="http://127.0.0.1:18082")
