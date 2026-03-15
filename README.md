@@ -61,6 +61,7 @@ Useful endpoints after startup:
 
 - `https://127.0.0.1:8443/health`
 - `https://127.0.0.1:8443/ready`
+- `https://127.0.0.1:8443/api/version` for the relayed device version endpoint
 - `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
 
 Management access notes:
@@ -101,6 +102,8 @@ Use the root build script for the standard workflows:
 ./build smoke
 ./build ci
 ```
+
+Python dependency installs are enforced from the hash-locked manifests `requirements.lock.txt` and `requirements-dev.lock.txt`.
 
 You only need Python if you want to run the local lint and test workflow outside the containerized smoke path.
 

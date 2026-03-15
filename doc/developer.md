@@ -15,6 +15,8 @@ source .venv/bin/activate
 ./build test
 ```
 
+The local virtual environment and the production image both install Python dependencies from the hash-locked manifests `requirements-dev.lock.txt` and `requirements.lock.txt`.
+
 ## Build Entry Point
 
 `./build --help` prints all supported workflows. The important commands are:
@@ -27,6 +29,8 @@ source .venv/bin/activate
 - `./build hil`: run optional hardware-in-the-loop tests against `c64u`
 - `./build image`: build the production Docker image locally
 - `./build ci`: run the local CI-equivalent workflow
+
+If you update `requirements.txt` or `requirements-dev.txt`, regenerate the lock files with `./.venv/bin/pip-compile --generate-hashes --output-file requirements.lock.txt requirements.txt` and `./.venv/bin/pip-compile --generate-hashes --output-file requirements-dev.lock.txt requirements-dev.txt` before committing.
 
 ## Host HTTPS On 443
 

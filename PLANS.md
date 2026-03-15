@@ -19,16 +19,16 @@ Strategy:
 
 | Finding | Status | Primary code/docs targets | Planned remediation |
 | --- | --- | --- | --- |
-| F1 | In progress | `src/controlplane/runtime.py`, `src/common/capture.py`, `tests/smoke/test_image_runtime.py` | Supervise nftables, dnsmasq, ProFTPD, dumpcap; fail closed on startup and readiness |
-| F2 | In progress | `Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh`, `src/controlplane/runtime.py` | Add non-root service user for app processes, tighten mounts, permissions, read-only runtime, no-new-privileges, capability minimization by process |
-| F3 | In progress | `docker-compose.yml`, `src/common/settings.py`, `src/common/config_renderers.py`, `src/controlplane/app.py`, `src/controlplane/auth.py` | Remove direct `8081` publish, bind control plane to loopback, require TLS-facing access through Caddy, unify auth on configured credentials, reject weak defaults |
-| F4 | In progress | `Dockerfile`, `.github/workflows/ci.yml`, `build`, dependency manifests | Verify Caddy checksum, pin actions to SHAs, move build install path toward stronger dependency integrity and document reproducibility |
-| F5 | In progress | `docker/entrypoint.sh`, `docker-compose.yml`, docs | Tighten filesystem permissions on CA state, logs, and captures; document secret handling and rotation |
-| F6 | In progress | `src/common/config_renderers.py`, `src/common/settings.py`, runtime tests | Replace broad egress accept with explicit allowlist generation, add IPv6 controls and dual-stack tests |
-| F7 | In progress | `src/upgrade_proxy/service.py`, proxy tests | Add read timeouts, header/body limits, malformed-input handling, and streaming-safe forwarding |
-| F8 | In progress | `src/common/logging.py`, `src/common/settings.py`, capture/runtime code, tests | Add log rotation, redaction, disk limits, and bounded readiness detail |
-| F9 | In progress | `src/common/settings.py`, docs, tests | Make strict TLS safer by default where feasible, add warnings and constrained exposure guidance for plaintext paths |
-| F10 | In progress | `scripts/setup-host-https.sh`, docs | Document host-wide sysctl impact clearly and prefer narrower guidance where possible |
+| F1 | Resolved | `src/controlplane/runtime.py`, `src/common/capture.py`, `tests/smoke/test_image_runtime.py` | Runtime now applies nftables, supervises mandatory services, and gates readiness on verified component health with simulation-specific dnsmasq skipping |
+| F2 | Resolved | `Dockerfile`, `docker-compose.yml`, `docker/entrypoint.sh`, `src/controlplane/runtime.py` | Added non-root service user, read-only runtime contract, tightened mounts and permissions, and conditional privilege dropping |
+| F3 | Resolved | `docker-compose.yml`, `src/common/settings.py`, `src/common/config_renderers.py`, `src/controlplane/app.py`, `src/controlplane/auth.py` | Removed direct `8081` publishing, bound control plane to loopback, enforced TLS-fronted management access, and rejected weak credentials outside simulation |
+| F4 | Resolved | `Dockerfile`, `.github/workflows/ci.yml`, `build`, dependency manifests | Verified Caddy checksums, pinned actions to SHAs, and moved runtime and dev installs to hash-locked dependency manifests |
+| F5 | Resolved | `docker/entrypoint.sh`, `docker-compose.yml`, docs | Tightened permissions on CA, logs, and captures and documented Caddy CA material handling |
+| F6 | Resolved | `src/common/config_renderers.py`, `src/common/settings.py`, runtime tests | Replaced broad egress accept with explicit allowlists, added IPv6 containment, and covered empty allowlists and dual-stack behavior |
+| F7 | Resolved | `src/upgrade_proxy/service.py`, proxy tests | Added timeouts, header and body limits, malformed-input handling, and unsupported transfer-encoding rejection |
+| F8 | Resolved | `src/common/logging.py`, `src/common/settings.py`, capture/runtime code, tests | Added log rotation, sensitive-header redaction, bounded readiness details, and explicit capture summaries |
+| F9 | Resolved | `src/common/settings.py`, docs, tests | Preserved compatibility fallback but added stronger warnings, auth checks, and constrained documentation for plaintext exceptions |
+| F10 | Resolved | `scripts/setup-host-https.sh`, docs | Documented the host-wide sysctl impact and paired it with Chrome NSS trust guidance |
 
 ## Phased Execution Plan
 
@@ -41,78 +41,86 @@ Strategy:
 
 ### Phase 2 - Security Architecture Enforcement
 
-- [ ] Apply nftables rules at runtime
-- [ ] Start and supervise dnsmasq
-- [ ] Start and supervise ProFTPD
-- [ ] Start and supervise dumpcap
-- [ ] Fail closed if any mandatory control is inactive
-- [ ] Require readiness to prove firewall, DHCP, proxy, and observability activation
+- [x] Apply nftables rules at runtime
+- [x] Start and supervise dnsmasq
+- [x] Start and supervise ProFTPD
+- [x] Start and supervise dumpcap
+- [x] Fail closed if any mandatory control is inactive
+- [x] Require readiness to prove firewall, DHCP, proxy, and observability activation
 
 ### Phase 3 - Container Hardening
 
-- [ ] Introduce non-root execution for non-network-control services
-- [ ] Drop privileges for Caddy, FastAPI, and proxy subprocesses
-- [ ] Add read-only root filesystem support and writable tmpfs/mount guidance
-- [ ] Add `no-new-privileges`
-- [ ] Tighten filesystem permissions for CA, logs, and PCAPs
-- [ ] Document container security model
+- [x] Introduce non-root execution for non-network-control services
+- [x] Drop privileges for Caddy, FastAPI, and proxy subprocesses
+- [x] Add read-only root filesystem support and writable tmpfs/mount guidance
+- [x] Add `no-new-privileges`
+- [x] Tighten filesystem permissions for CA, logs, and PCAPs
+- [x] Document container security model
 
 ### Phase 4 - Management Plane Security
 
-- [ ] Remove public exposure of port 8081
-- [ ] Require TLS-facing access through Caddy for management endpoints
-- [ ] Unify authentication on configured credentials only
-- [ ] Remove hardcoded Caddy auth material
-- [ ] Enforce strong password configuration outside simulation
-- [ ] Require authentication for management API access
+- [x] Remove public exposure of port 8081
+- [x] Require TLS-facing access through Caddy for management endpoints
+- [x] Unify authentication on configured credentials only
+- [x] Remove hardcoded Caddy auth material
+- [x] Enforce strong password configuration outside simulation
+- [x] Require authentication for management API access
 
 ### Phase 5 - Firewall Policy Correction
 
-- [ ] Implement explicit destination allowlist generation
-- [ ] Add IPv6 containment parity
-- [ ] Block RFC1918 and other local IPv6 ranges unless explicitly allowed
-- [ ] Add dual-stack enforcement tests
+- [x] Implement explicit destination allowlist generation
+- [x] Add IPv6 containment parity
+- [x] Block RFC1918 and other local IPv6 ranges unless explicitly allowed
+- [x] Add dual-stack enforcement tests
 
 ### Phase 6 - Supply Chain Hardening
 
-- [ ] Verify Caddy download integrity in `Dockerfile`
-- [ ] Pin GitHub Actions to immutable SHAs
-- [ ] Strengthen Python dependency integrity controls
-- [ ] Document reproducible build expectations
+- [x] Verify Caddy download integrity in `Dockerfile`
+- [x] Pin GitHub Actions to immutable SHAs
+- [x] Strengthen Python dependency integrity controls
+- [x] Document reproducible build expectations
 
 ### Phase 7 - Proxy Robustness
 
-- [ ] Add client read timeouts
-- [ ] Enforce header size limits
-- [ ] Enforce request body limits
-- [ ] Add malformed-request rejection paths
-- [ ] Validate request/response body handling with tests
+- [x] Add client read timeouts
+- [x] Enforce header size limits
+- [x] Enforce request body limits
+- [x] Add malformed-request rejection paths
+- [x] Validate request/response body handling with tests
 
 ### Phase 8 - Logging and Observability Security
 
-- [ ] Add JSON log rotation and retention
-- [ ] Redact sensitive headers and secrets by default
-- [ ] Bound readiness detail to avoid reconnaissance leakage
-- [ ] Enforce PCAP retention policy and permission model
-- [ ] Add disk pressure and log flooding tests
+- [x] Add JSON log rotation and retention
+- [x] Redact sensitive headers and secrets by default
+- [x] Bound readiness detail to avoid reconnaissance leakage
+- [x] Enforce PCAP retention policy and permission model
+- [x] Add disk pressure and log flooding tests
 
 ### Phase 9 - Protocol Risk Mitigation
 
-- [ ] Tighten strict TLS defaults and warnings
-- [ ] Document Telnet and plaintext HTTP exception handling
-- [ ] Add verification for warning paths and defaults
+- [x] Tighten strict TLS defaults and warnings
+- [x] Document Telnet and plaintext HTTP exception handling
+- [x] Add verification for warning paths and defaults
+
+### Phase 10 - CI Image And Browser Verification
+
+- [x] Ensure GitHub CI builds and smoke-tests image tag `0.0.1`
+- [x] Start image tag `0.0.1` locally and verify `https://127.0.0.1:<port>/api/version`
+- [ ] Verify the trusted local HTTPS path in Chrome via Playwright without certificate warnings
 
 ## Security Acceptance Criteria
 
 - Every finding F1-F10 is fixed, mitigated with documented controls, or formally justified with evidence.
 - Startup fails when any mandatory security control cannot be started or verified.
-- Readiness reports `ready` only when firewall, DHCP, FTPS, proxy, and capture controls are active.
+- Readiness reports `ready` only when all mandatory controls for the current mode are active; simulation mode records dnsmasq as skipped rather than falsely healthy.
 - Control-plane access is not published directly on `8081` in the default deployment.
 - Management endpoints require configured authentication and are only exposed via TLS.
 - Firewall tests prove RFC1918 and IPv6 containment plus fail-closed behavior.
 - Proxy tests prove timeout, malformed-input, oversized-header, and body-handling resilience.
 - Container and smoke tests prove the hardened runtime contract.
 - Build pipeline verifies Caddy integrity and CI actions are SHA pinned.
+- GitHub CI builds and smoke-tests image tag `0.0.1`.
+- Local validation proves `https://127.0.0.1:<port>/api/version` is reachable through the image and trusted in Chrome.
 
 ## Test Plan
 
@@ -136,3 +144,5 @@ Strategy:
 | Timestamp | Action performed | Files modified | Commands executed | Results observed | Tests executed | Next step |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-03-15T14:30:57+00:00 | Verified audit findings against architecture, runtime, config, container, and test surfaces; created the remediation execution artifacts. | `PLANS.md`, `doc/audit/security-remediation-plan.md` | `date -Iseconds`, read-only code inspection | Confirmed F1, F3, F6, and F7 directly in implementation; confirmed F4 and CI mutability; identified current smoke path assumptions around `8081`. | None | Implement runtime enforcement and management-plane hardening first because they unblock multiple findings and tests. |
+| 2026-03-15T15:15:00+00:00 | Completed runtime hardening convergence, fixed smoke blockers in nftables, Caddy, ProFTPD, and dnsmasq, and made simulation-mode readiness honest. | `src/controlplane/runtime.py`, `src/common/config_renderers.py`, `tests/integration/test_runtime.py`, `tests/integration/test_caddy.py`, `tests/integration/test_dhcp_and_dns.py`, `tests/integration/test_firewall.py`, `tests/integration/test_ftps.py`, `tests/smoke/test_image_runtime.py` | `./build lint`, `./build test`, `./build smoke`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke` | Local smoke passed for both `c64gate:dev` and `c64gate:0.0.1`; `/api/version` returned the relayed simulation payload over HTTPS. | `./build lint`, `./build test`, `./build smoke`, `C64GATE_IMAGE=c64gate:0.0.1 ./build smoke` | Add hash-locked Python dependency manifests and complete final browser-level HTTPS validation. |
+| 2026-03-15T15:20:00+00:00 | Added hash-locked Python dependency manifests and switched build and image installs to enforce hashes. | `requirements.lock.txt`, `requirements-dev.lock.txt`, `Dockerfile`, `build`, `README.md`, `doc/developer.md` | `./.venv/bin/pip install --upgrade pip-tools`, `./.venv/bin/pip-compile --generate-hashes --output-file requirements.lock.txt requirements.txt`, `./.venv/bin/pip-compile --generate-hashes --output-file requirements-dev.lock.txt requirements-dev.txt`, `./build ci` | Local CI-equivalent workflow passed with hash-enforced installs and coverage remained above 90%. | `./build ci` | Perform the final Chrome Playwright validation and close the plan. |
