@@ -9,6 +9,46 @@ It sits between the device and the rest of the network, secures inbound and outb
 > [!NOTE]
 > This project is under active development. Some documented features may not yet be fully functional.
 
+## How Does It Work
+
+C64 Gate sits between the Commodore 64 Ultimate and the outside world.  
+It protects the device by securing inbound connections and upgrading outbound traffic whenever possible.
+
+### Outbound Protection
+
+When the C64 Ultimate makes a network request, C64 Gate attempts to upgrade insecure HTTP connections to HTTPS automatically.
+
+```mermaid
+flowchart LR
+    Internet["Internet Service"]
+    Gate["C64 Gate"]
+    C64["C64 Ultimate"]
+
+    C64 -->|"1. HTTP request"| Gate
+    Gate -->|"2. Try HTTPS first"| Internet
+    Internet -->|"3. HTTPS response"| Gate
+    Gate -->|"4. HTTP response"| C64
+```
+
+---
+
+### Secure Inbound Access
+
+External clients connect securely to C64 Gate.  
+The gateway then communicates with the C64 Ultimate on its internal network.
+
+```mermaid
+flowchart LR
+    Client["Client"]
+    Gate["C64 Gate"]
+    C64["C64 Ultimate"]
+
+    Client -->|"1. HTTPS / FTPS request"| Gate
+    Gate -->|"2. HTTP / FTP request"| C64
+    C64 -->|"3. HTTP / FTP Response"| Gate
+    Gate -->|"4. HTTPS / FTPS response"| Client
+```
+
 ## What You Get
 
 - One container image for the complete gateway runtime
