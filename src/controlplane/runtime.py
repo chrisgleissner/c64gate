@@ -58,6 +58,7 @@ def ensure_runtime_tls_material(settings: Settings) -> None:
     tls_dir = Path(settings.runtime_dir) / "tls"
     cert_path = tls_dir / "test-cert.pem"
     key_path = tls_dir / "test-key.pem"
+    openssl_config_path = tls_dir / "openssl-san.cnf"
     if cert_path.exists() and key_path.exists():
         return
     openssl_path = shutil.which("openssl")
@@ -67,6 +68,29 @@ def ensure_runtime_tls_material(settings: Settings) -> None:
             key_path.write_text("simulation-key\n", encoding="utf-8")
             return
         raise RuntimeError("missing openssl for runtime TLS material generation")
+    openssl_config_path.write_text(
+        """
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+x509_extensions = v3_req
+distinguished_name = dn
+
+[dn]
+CN = c64gate.local
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = c64gate.local
+DNS.2 = localhost
+IP.1 = 127.0.0.1
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             openssl_path,
@@ -77,8 +101,10 @@ def ensure_runtime_tls_material(settings: Settings) -> None:
             "rsa:2048",
             "-days",
             "365",
-            "-subj",
-            "/CN=c64gate.local",
+            "-config",
+            str(openssl_config_path),
+            "-extensions",
+            "v3_req",
             "-keyout",
             str(key_path),
             "-out",

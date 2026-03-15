@@ -17,7 +17,7 @@ services:
       - NET_ADMIN
       - NET_RAW
     ports:
-      - "8443:8443"
+      - "${C64GATE_HTTPS_HOST_PORT:-8443}:8443"
       - "2121:2121"
       - "8081:8081"
     volumes:

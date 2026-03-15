@@ -61,6 +61,8 @@ Useful endpoints after startup:
 - `http://127.0.0.1:8081/ready`
 - `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
 
+If you want host port `443` instead of `8443`, set `C64GATE_HTTPS_HOST_PORT=443` before starting Compose. On rootless Docker hosts, publishing `443` may require lowering `net.ipv4.ip_unprivileged_port_start` or using a rootful Docker daemon.
+
 Stop the stack:
 
 ```bash
