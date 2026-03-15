@@ -27,9 +27,9 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
     caddy_dir = tmp_path / "caddy"
     logs_dir = tmp_path / "logs"
     pcap_dir = tmp_path / "pcap"
-    caddy_dir.mkdir()
-    logs_dir.mkdir()
-    pcap_dir.mkdir()
+    for mount_dir in (caddy_dir, logs_dir, pcap_dir):
+        mount_dir.mkdir()
+        mount_dir.chmod(0o777)
     subprocess.run(
         [
             "docker",
