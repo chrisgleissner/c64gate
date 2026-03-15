@@ -98,9 +98,7 @@ async def test_upgrade_proxy_strict_mode_blocks_fallback(
 
 
 @pytest.mark.asyncio
-async def test_upgrade_proxy_rejects_oversized_headers(
-    temp_settings, tmp_path: Path
-) -> None:
+async def test_upgrade_proxy_rejects_oversized_headers(temp_settings, tmp_path: Path) -> None:
     logger = JsonLogger(tmp_path / "oversized.jsonl")
     runtime_state = {"ready": True, "metrics": {}, "components": {}}
     service = UpgradeProxyService(

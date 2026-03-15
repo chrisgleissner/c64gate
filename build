@@ -50,12 +50,12 @@ ensure_venv() {
 cmd_venv() {
   python3 -m venv "${VENV_DIR}"
   "${PIP_BIN}" install --upgrade pip
-  "${PIP_BIN}" install -r "${ROOT_DIR}/requirements-dev.txt"
+  "${PIP_BIN}" install --require-hashes -r "${ROOT_DIR}/requirements-dev.lock.txt"
 }
 
 cmd_deps() {
   ensure_venv
-  "${PIP_BIN}" install -r "${ROOT_DIR}/requirements-dev.txt"
+  "${PIP_BIN}" install --require-hashes -r "${ROOT_DIR}/requirements-dev.lock.txt"
 }
 
 cmd_fmt() {

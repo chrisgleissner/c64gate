@@ -245,11 +245,7 @@ async def test_simulated_rest_backend_serves_version(tmp_path: Path) -> None:
     server = await runtime.start_simulated_rest_backend(settings)
     try:
         reader, writer = await asyncio.open_connection("127.0.0.1", 18082)
-        writer.write(
-            b"GET /api/version HTTP/1.1\r\n"
-            b"Host: 127.0.0.1\r\n"
-            b"Connection: close\r\n\r\n"
-        )
+        writer.write(b"GET /api/version HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
         await writer.drain()
         payload = await reader.read()
         assert b"200 OK" in payload

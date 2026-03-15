@@ -114,9 +114,7 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
         )
         assert "v2.11.2" in versions.stdout or "2.11.2" in versions.stdout
         (Path("artifacts")).mkdir(exist_ok=True)
-        Path("artifacts/smoke-ready.json").write_text(
-            json.dumps(ready, indent=2), encoding="utf-8"
-        )
+        Path("artifacts/smoke-ready.json").write_text(json.dumps(ready, indent=2), encoding="utf-8")
         Path("artifacts/smoke-version.json").write_text(
             json.dumps(version, indent=2), encoding="utf-8"
         )

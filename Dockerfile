@@ -52,8 +52,8 @@ COPY --from=caddy-fetch /usr/local/bin/caddy /usr/local/bin/caddy
 
 WORKDIR /opt/c64gate
 
-COPY requirements.txt ./
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
+COPY requirements.txt requirements.lock.txt ./
+RUN python3 -m pip install --no-cache-dir --break-system-packages --require-hashes -r requirements.lock.txt
 
 COPY src ./src
 COPY config ./config

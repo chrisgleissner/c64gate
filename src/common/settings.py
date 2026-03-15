@@ -64,9 +64,10 @@ class Settings(BaseSettings):
     )
 
     def dashboard_password_is_weak(self) -> bool:
-        return self.dashboard_password in {"", "changeme", "password", "admin"} or len(
-            self.dashboard_password
-        ) < 12
+        return (
+            self.dashboard_password in {"", "changeme", "password", "admin"}
+            or len(self.dashboard_password) < 12
+        )
 
     def device_subnet_prefixlen(self) -> int:
         return int(ip_network(self.device_subnet, strict=False).prefixlen)

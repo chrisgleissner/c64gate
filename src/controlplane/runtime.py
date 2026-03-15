@@ -302,9 +302,7 @@ def validate_binaries(simulation_mode: bool) -> dict[str, dict[str, Any]]:
     return components
 
 
-def update_component_state(
-    runtime_state: dict[str, Any], component: str, **fields: Any
-) -> None:
+def update_component_state(runtime_state: dict[str, Any], component: str, **fields: Any) -> None:
     runtime_state.setdefault("components", {}).setdefault(component, {}).update(fields)
     mandatory_components = runtime_state.get("mandatory_components", MANDATORY_COMPONENTS)
     runtime_state["ready"] = all(
