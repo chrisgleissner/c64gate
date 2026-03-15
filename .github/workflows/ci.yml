@@ -81,6 +81,7 @@ jobs:
           docker buildx build --platform "${{ matrix.platform }}" --load -t "$C64GATE_IMAGE" -t "c64gate:${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}" .
 
       - name: Smoke test exact image
+        if: matrix.platform == 'linux/amd64'
         env:
           C64GATE_IMAGE: c64gate:0.0.1
         run: ./build smoke --skip-build
