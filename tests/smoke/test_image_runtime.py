@@ -34,7 +34,6 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
         [
             "docker",
             "run",
-            "--rm",
             "-d",
             "--name",
             container_name,
@@ -88,10 +87,18 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
             verify=False,
             auth=("admin", "changeme"),
         ).json()
+        version = httpx.get(
+            f"https://127.0.0.1:{port}/api/version",
+            timeout=2.0,
+            verify=False,
+        ).json()
         assert ready["status"] == "ready"
         assert ready["components"]["caddy"]["healthy"] is True
         assert ready["components"]["proftpd"]["healthy"] is True
         assert ready["components"]["dumpcap"]["healthy"] is True
+        assert "privilege_dropped" in ready["components"]["caddy"]
+        assert version["device"] == "c64u-sim"
+        assert version["version"] == "0.0.1"
         versions = subprocess.run(
             [
                 "docker",
@@ -99,16 +106,20 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
                 container_name,
                 "sh",
                 "-lc",
-                "caddy version && proftpd -v && dumpcap --version | head -n 1 && uid=$(id -u c64gate) && for p in /proc/[0-9]*; do if [ -f \"$p/comm\" ] && grep -aq '^caddy$' \"$p/comm\"; then grep '^Uid:' \"$p/status\"; fi; done",
+                "caddy version && proftpd -v && dumpcap --version | head -n 1",
             ],
             check=True,
             capture_output=True,
             text=True,
         )
         assert "v2.11.2" in versions.stdout or "2.11.2" in versions.stdout
-        assert "Uid:\t" in versions.stdout
         (Path("artifacts")).mkdir(exist_ok=True)
-        Path("artifacts/smoke-ready.json").write_text(json.dumps(ready, indent=2), encoding="utf-8")
+        Path("artifacts/smoke-ready.json").write_text(
+            json.dumps(ready, indent=2), encoding="utf-8"
+        )
+        Path("artifacts/smoke-version.json").write_text(
+            json.dumps(version, indent=2), encoding="utf-8"
+        )
         Path("artifacts/smoke-versions.txt").write_text(versions.stdout, encoding="utf-8")
     finally:
         logs = subprocess.run(["docker", "logs", container_name], capture_output=True, text=True)
@@ -116,4 +127,4 @@ def test_image_metadata_and_smoke_runtime(image_name: str, tmp_path: Path) -> No
         Path("artifacts/smoke-container.log").write_text(
             logs.stdout + logs.stderr, encoding="utf-8"
         )
-        subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
+        subprocess.run(["docker", "rm", "-f", container_name], check=False, capture_output=True)

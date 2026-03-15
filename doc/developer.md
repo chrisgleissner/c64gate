@@ -22,7 +22,7 @@ source .venv/bin/activate
 - `./build fmt`: run formatting
 - `./build fmt --check`: check formatting only
 - `./build lint`: run Ruff
-- `./build test`: run the Python test suite
+- `./build test`: run the Python test suite with an enforced total coverage gate above 80% and write `artifacts/coverage.xml`
 - `./build smoke`: build the production image and run smoke validation against that image
 - `./build hil`: run optional hardware-in-the-loop tests against `c64u`
 - `./build image`: build the production Docker image locally
@@ -37,6 +37,7 @@ sudo ./scripts/setup-host-https.sh
 ```
 
 That script lowers `net.ipv4.ip_unprivileged_port_start` to `443` and installs `libnss3-tools` so Chrome trust can be updated without making the c64gate container run as root.
+Because the sysctl is host-wide, do this only on a single-user or otherwise trusted Linux host.
 
 After the stack has started once and generated the Caddy local CA, trust it for Chrome and other NSS consumers with:
 
@@ -50,6 +51,8 @@ After the stack has started once and generated the Caddy local CA, trust it for 
 - Full routing and capture flows may require `NET_ADMIN` and `NET_RAW` at container runtime.
 - The default automated validation path uses a simulation fixture mode that still runs the exact production image but avoids mutating host networking state.
 - Real device-side DHCP and firewall enforcement should be exercised on a disposable Linux host or namespace-backed integration setup.
+- The hardened Compose contract assumes `read_only: true`, `no-new-privileges`, loopback-only host binds by default, and writable runtime state only in `/run`, `/tmp`, and the explicit artifact mounts.
+- The default management path is `https://127.0.0.1:8443`; `8081` is intentionally private to the container.
 
 ## Traceability Workflow
 

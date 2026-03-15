@@ -26,8 +26,8 @@ If you only want a quick proof that the project works, the shortest useful path 
 
 1. Install Docker on a Linux machine.
 2. Run `docker compose up --build` in this repository.
-3. Open `http://127.0.0.1:8081/health` and confirm the service answers.
-4. Open `http://127.0.0.1:8081/ready` and inspect the runtime status.
+3. Open `https://127.0.0.1:8443/health` with the configured dashboard credentials and confirm the service answers.
+4. Open `https://127.0.0.1:8443/ready` with the configured dashboard credentials and inspect the runtime status.
 
 That path uses the same production image the tests validate. By default, the Compose setup runs in simulation mode so you can explore the system without attaching a real device or changing host networking more than necessary.
 
@@ -57,9 +57,15 @@ C64GATE_REST_BACKEND_URL=http://192.168.1.167 docker compose up --build
 
 Useful endpoints after startup:
 
-- `http://127.0.0.1:8081/health`
-- `http://127.0.0.1:8081/ready`
+- `https://127.0.0.1:8443/health`
+- `https://127.0.0.1:8443/ready`
 - `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
+
+Management access notes:
+
+- The default Compose profile no longer publishes `8081`; management traffic must enter through the HTTPS facade.
+- `/health`, `/ready`, and `/dashboard/*` require the configured dashboard credentials.
+- `C64GATE_DASHBOARD_PASSWORD` must be changed from `changeme` outside simulation mode or the runtime will refuse to start.
 
 If you want host port `443` instead of `8443`, set `C64GATE_HTTPS_HOST_PORT=443` before starting Compose. On rootless Docker hosts, publishing `443` may require lowering `net.ipv4.ip_unprivileged_port_start` or using a rootful Docker daemon.
 
@@ -80,6 +86,7 @@ docker compose down
 ```
 
 The default Compose file mounts logs and packet captures into `data/logs` and `data/pcap` so you can inspect outputs from the host.
+The Caddy local CA state under `data/caddy` should be treated as secret material and kept out of broad backups or sharing workflows.
 
 ## When You Want More Than A Demo
 
@@ -109,6 +116,8 @@ The most useful follow-on documents are:
 - The project is designed as a router-mode gateway, not a generic cross-platform desktop app.
 - Real firewall enforcement, DHCP service, and device traffic capture are best exercised on a disposable Linux host or an isolated lab network.
 - The runtime depends on Linux networking capabilities such as `NET_ADMIN` and `NET_RAW`.
+- Strict TLS mode is available through `C64GATE_STRICT_TLS_MODE=1`; default fallback HTTP remains an exception path for compatibility and should be limited to trusted environments.
+- Telnet and other plaintext paths remain compatibility features and should not be exposed outside a trusted administrative enclave.
 
 ## Non-Goals In V1
 

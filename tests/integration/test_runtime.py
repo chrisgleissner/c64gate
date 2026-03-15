@@ -79,7 +79,9 @@ def test_stop_managed_process_handles_timeout() -> None:
     assert process.killed is True
 
 
-def test_ensure_runtime_layout_and_credentials(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ensure_runtime_layout_and_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings = _runtime_settings(tmp_path)
     chowned: list[Path] = []
     monkeypatch.setattr(runtime.os, "geteuid", lambda: 0)
@@ -130,7 +132,8 @@ def test_ensure_runtime_tls_material_paths(tmp_path: Path, monkeypatch: pytest.M
     (settings.runtime_dir / "tls").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(runtime.shutil, "which", lambda _: None)
     runtime.ensure_runtime_tls_material(settings)
-    assert (settings.runtime_dir / "tls/test-cert.pem").read_text(encoding="utf-8") == "simulation-cert\n"
+    cert = (settings.runtime_dir / "tls/test-cert.pem").read_text(encoding="utf-8")
+    assert cert == "simulation-cert\n"
 
     secured = _runtime_settings(tmp_path / "strict", simulation_mode=False)
     (secured.runtime_dir / "tls").mkdir(parents=True, exist_ok=True)
@@ -139,12 +142,20 @@ def test_ensure_runtime_tls_material_paths(tmp_path: Path, monkeypatch: pytest.M
         runtime.ensure_runtime_tls_material(secured)
 
 
-def test_ensure_runtime_tls_material_uses_openssl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ensure_runtime_tls_material_uses_openssl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings = _runtime_settings(tmp_path)
     (settings.runtime_dir / "tls").mkdir(parents=True, exist_ok=True)
     calls: list[list[str]] = []
 
-    def fake_run(command: list[str], check: bool, env: dict[str, str], stdout: int, stderr: int) -> None:
+    def fake_run(
+        command: list[str],
+        check: bool,
+        env: dict[str, str],
+        stdout: int,
+        stderr: int,
+    ) -> None:
         calls.append(command)
         cert_path = Path(command[command.index("-out") + 1])
         key_path = Path(command[command.index("-keyout") + 1])
@@ -171,7 +182,11 @@ def test_render_runtime_configs_and_validate_binaries(
     components = runtime.validate_binaries(simulation_mode=False)
     assert components["nft"]["present"] is True
 
-    monkeypatch.setattr(runtime.shutil, "which", lambda binary: None if binary == "nft" else f"/usr/bin/{binary}")
+    monkeypatch.setattr(
+        runtime.shutil,
+        "which",
+        lambda binary: None if binary == "nft" else f"/usr/bin/{binary}",
+    )
     with pytest.raises(RuntimeError):
         runtime.validate_binaries(simulation_mode=False)
     simulated = runtime.validate_binaries(simulation_mode=True)
@@ -193,6 +208,51 @@ def test_update_component_state_and_apply_nftables(
     assert state["components"]["nftables"]["healthy"] is True
 
 
+def test_should_start_simulated_rest_backend(tmp_path: Path) -> None:
+    settings = _runtime_settings(tmp_path)
+    assert runtime.should_start_simulated_rest_backend(settings) is True
+    external = _runtime_settings(
+        tmp_path / "external",
+        rest_backend_url="http://192.168.1.10:8080",
+    )
+    assert runtime.should_start_simulated_rest_backend(external) is False
+
+
+def test_can_drop_privileges_to_service_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    writable = tmp_path / "writable"
+    writable.mkdir()
+    writable.chmod(0o700)
+    monkeypatch.setattr(runtime.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(runtime, "_service_account_ids", lambda: (writable.stat().st_uid, 1000))
+    assert runtime.can_drop_privileges_to_service_user(writable) is True
+    monkeypatch.setattr(runtime, "_service_account_ids", lambda: (999999, 999999))
+    assert runtime.can_drop_privileges_to_service_user(writable) is False
+
+
+@pytest.mark.asyncio
+async def test_simulated_rest_backend_serves_version(tmp_path: Path) -> None:
+    settings = _runtime_settings(tmp_path, rest_backend_url="http://127.0.0.1:18082")
+    server = await runtime.start_simulated_rest_backend(settings)
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", 18082)
+        writer.write(
+            b"GET /api/version HTTP/1.1\r\n"
+            b"Host: 127.0.0.1\r\n"
+            b"Connection: close\r\n\r\n"
+        )
+        await writer.drain()
+        payload = await reader.read()
+        assert b"200 OK" in payload
+        assert b'"version": "0.0.1"' in payload
+        writer.close()
+        await writer.wait_closed()
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
 @pytest.mark.asyncio
 async def test_monitor_processes_updates_exit_flag() -> None:
     state = {"components": {}, "ready": False}
@@ -204,7 +264,9 @@ async def test_monitor_processes_updates_exit_flag() -> None:
 
 
 @pytest.mark.asyncio
-async def test_serve_orchestrates_components(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_serve_orchestrates_components(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     settings = _runtime_settings(tmp_path)
     calls: list[str] = []
 
@@ -219,7 +281,12 @@ async def test_serve_orchestrates_components(tmp_path: Path, monkeypatch: pytest
             return None
 
     class FakeUpgradeProxyService:
-        def __init__(self, settings: Settings, logger: object, runtime_state: dict[str, object]) -> None:
+        def __init__(
+            self,
+            settings: Settings,
+            logger: object,
+            runtime_state: dict[str, object],
+        ) -> None:
             self.client = SimpleNamespace(aclose=self._aclose)
             self.server = FakeProxyServer()
 
@@ -246,16 +313,40 @@ async def test_serve_orchestrates_components(tmp_path: Path, monkeypatch: pytest
             self.cancelled = True
 
     monkeypatch.setattr(runtime, "get_settings", lambda: settings)
-    monkeypatch.setattr(runtime, "validate_management_auth", lambda current: calls.append("validate_auth"))
-    monkeypatch.setattr(runtime, "validate_binaries", lambda simulation_mode: {"caddy": {"present": True}})
-    monkeypatch.setattr(runtime, "prepare_simulation_network", lambda current: calls.append("prepare_network"))
+    monkeypatch.setattr(
+        runtime,
+        "validate_management_auth",
+        lambda current: calls.append("validate_auth"),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "validate_binaries",
+        lambda simulation_mode: {"caddy": {"present": True}},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "prepare_simulation_network",
+        lambda current: calls.append("prepare_network"),
+    )
     monkeypatch.setattr(runtime, "render_runtime_configs", lambda current: {"Caddyfile": "ok"})
     monkeypatch.setattr(runtime, "apply_nftables", lambda current, state: calls.append("apply_nft"))
     monkeypatch.setattr(runtime, "create_app", lambda settings, logger, runtime_state: object())
     monkeypatch.setattr(runtime, "UpgradeProxyService", FakeUpgradeProxyService)
-    monkeypatch.setattr(runtime, "build_capture_plan", lambda current: CapturePlan(["dumpcap"], ["tshark"], ["capinfos"]))
-    monkeypatch.setattr(runtime, "start_managed_process", lambda command, name, drop_privileges=False, extra_env=None: FakeProcess())
-    monkeypatch.setattr(runtime, "stop_managed_process", lambda process: calls.append("stop_process"))
+    monkeypatch.setattr(
+        runtime,
+        "build_capture_plan",
+        lambda current: CapturePlan(["dumpcap"], ["tshark"], ["capinfos"]),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "start_managed_process",
+        lambda command, name, drop_privileges=False, extra_env=None: FakeProcess(),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "stop_managed_process",
+        lambda process: calls.append("stop_process"),
+    )
     monkeypatch.setattr(runtime.asyncio, "create_task", lambda coro: FakeTask(coro))
     monkeypatch.setattr(runtime.uvicorn, "Config", lambda *args, **kwargs: SimpleNamespace())
     monkeypatch.setattr(runtime.uvicorn, "Server", FakeServer)

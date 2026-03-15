@@ -41,8 +41,14 @@ def test_health_and_readiness(temp_settings) -> None:
     )
     client = TestClient(app)
     assert client.get("/health").status_code == 401
-    health = client.get("/health", auth=(temp_settings.dashboard_user, temp_settings.dashboard_password))
+    health = client.get(
+        "/health",
+        auth=(temp_settings.dashboard_user, temp_settings.dashboard_password),
+    )
     assert health.json()["status"] == "ok"
-    ready = client.get("/ready", auth=(temp_settings.dashboard_user, temp_settings.dashboard_password)).json()
+    ready = client.get(
+        "/ready",
+        auth=(temp_settings.dashboard_user, temp_settings.dashboard_password),
+    ).json()
     assert ready["status"] == "ready"
     assert "capture" in ready

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ipaddress import ip_network
 from functools import lru_cache
+from ipaddress import ip_network
 from pathlib import Path
 
 from pydantic import Field

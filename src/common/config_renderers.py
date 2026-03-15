@@ -32,6 +32,19 @@ def _render_elements(elements: set[str]) -> str:
     return ", ".join(sorted(elements)) if elements else ""
 
 
+def _render_set(name: str, set_type: str, elements: set[str]) -> str:
+    rendered_elements = _render_elements(elements)
+    elements_clause = f"\n        elements = {{ {rendered_elements} }}" if rendered_elements else ""
+    return dedent(
+        f"""
+        set {name} {{
+            type {set_type}
+            flags interval{elements_clause}
+        }}
+        """
+    ).strip()
+
+
 def _collect_allowlist(settings: Settings) -> tuple[set[str], set[str]]:
     ipv4: set[str] = set()
     ipv6: set[str] = set()
@@ -60,6 +73,7 @@ def render_dnsmasq_config(settings: Settings) -> str:
         interface={settings.device_interface}
         bind-interfaces
         dhcp-authoritative
+        dhcp-leasefile={settings.runtime_dir}/dnsmasq.leases
         dhcp-range={dhcp_start},{dhcp_end},255.255.255.0,12h
         dhcp-option=3,{settings.gateway_address}
         dhcp-option=6,{settings.gateway_address}
@@ -77,6 +91,8 @@ def render_nftables_ruleset(settings: Settings) -> str:
     allowed_ipv4, allowed_ipv6 = _collect_allowlist(settings)
     input_ports = ", ".join(["8443", "2121"])
     commodore_hosts = " ".join(settings.commodore_hostnames)
+    allowed_v4_set = _render_set("allowed_v4", "ipv4_addr", allowed_ipv4)
+    allowed_v6_set = _render_set("allowed_v6", "ipv6_addr", allowed_ipv6)
     return (
         dedent(
             f"""
@@ -98,17 +114,9 @@ def render_nftables_ruleset(settings: Settings) -> str:
                 elements = {{ ::1/128, fc00::/7, fe80::/10 }}
             }}
 
-            set allowed_v4 {{
-                type ipv4_addr
-                flags interval
-                elements = {{ {_render_elements(allowed_ipv4)} }}
-            }}
+            {allowed_v4_set}
 
-            set allowed_v6 {{
-                type ipv6_addr
-                flags interval
-                elements = {{ {_render_elements(allowed_ipv6)} }}
-            }}
+            {allowed_v6_set}
 
             chain input {{
                 type filter hook input priority filter; policy drop;
@@ -123,10 +131,14 @@ def render_nftables_ruleset(settings: Settings) -> str:
             chain forward {{
                 type filter hook forward priority filter; policy drop;
                 ct state established,related accept
-                iifname $device_if oifname $uplink_if ip daddr @rfc1918 counter log prefix \"c64gate-rfc1918-drop \" drop
-                iifname $device_if oifname $uplink_if ip6 daddr @blocked_v6_local counter log prefix \"c64gate-ipv6-local-drop \" drop
-                iifname $device_if oifname $uplink_if ip daddr @allowed_v4 counter log prefix \"c64gate-allow-forward \" accept
-                iifname $device_if oifname $uplink_if ip6 daddr @allowed_v6 counter log prefix \"c64gate-allow-forward-v6 \" accept
+                iifname $device_if oifname $uplink_if ip daddr @rfc1918 \
+                    counter log prefix \"c64gate-rfc1918-drop \" drop
+                iifname $device_if oifname $uplink_if ip6 daddr @blocked_v6_local \
+                    counter log prefix \"c64gate-ipv6-local-drop \" drop
+                iifname $device_if oifname $uplink_if ip daddr @allowed_v4 \
+                    counter log prefix \"c64gate-allow-forward \" accept
+                iifname $device_if oifname $uplink_if ip6 daddr @allowed_v6 \
+                    counter log prefix \"c64gate-allow-forward-v6 \" accept
                 counter log prefix \"c64gate-forward-drop \" drop
             }}
 
@@ -138,7 +150,8 @@ def render_nftables_ruleset(settings: Settings) -> str:
         table ip c64gate_nat {{
             chain prerouting {{
                 type nat hook prerouting priority dstnat; policy accept;
-                iifname \"{settings.device_interface}\" tcp dport 80 redirect to :{settings.upgrade_proxy_port}
+                iifname \"{settings.device_interface}\" tcp dport 80 \
+                    redirect to :{settings.upgrade_proxy_port}
             }}
         }}
 
@@ -163,10 +176,11 @@ def render_caddyfile(settings: Settings) -> str:
             https_port 8443
             default_sni 127.0.0.1
             log {{
-                output file {settings.log_dir}/caddy-access.jsonl
+                    output file {settings.log_dir}/caddy-access.jsonl {{
+                        roll_size 10MiB
+                        roll_keep 5
+                    }}
                 format json
-                roll_size 10MiB
-                roll_keep 5
             }}
             local_certs
         }}
@@ -174,7 +188,7 @@ def render_caddyfile(settings: Settings) -> str:
         {addresses} {{
             tls internal
 
-            handle_path /api/* {{
+            handle /api/* {{
                 reverse_proxy {rest_backend} {{
                     header_up X-Forwarded-Proto https
                     header_up X-C64Gate true
@@ -204,7 +218,11 @@ def render_proftpd_config(settings: Settings) -> str:
     return (
         dedent(
             f"""
-        ServerName \"C64 Gate FTPS\"
+        Include /etc/proftpd/modules.conf
+        LoadModule mod_tls.c
+        LoadModule mod_proxy.c
+
+        ServerName "C64 Gate FTPS"
         ServerType standalone
         Port 2121
         UseIPv6 off
@@ -213,6 +231,11 @@ def render_proftpd_config(settings: Settings) -> str:
         AuthUserFile /run/c64gate/proftpd.passwd
         RequireValidShell off
         TimeoutIdle 600
+
+        <IfModule mod_delay.c>
+            DelayEngine off
+        </IfModule>
+
         TLSEngine on
         TLSProtocol TLSv1.2 TLSv1.3
         TLSRequired on

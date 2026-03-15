@@ -159,7 +159,10 @@ class UpgradeProxyService:
             if len(buffer) >= self.settings.proxy_max_header_bytes:
                 raise ProxyRequestError(431, "request headers too large")
             try:
-                chunk = await asyncio.wait_for(reader.read(1024), timeout=self.settings.proxy_client_header_timeout_seconds)
+                chunk = await asyncio.wait_for(
+                    reader.read(1024),
+                    timeout=self.settings.proxy_client_header_timeout_seconds,
+                )
             except TimeoutError as exc:
                 raise ProxyRequestError(408, "request header timeout") from exc
             if not chunk:

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from common.logging import JsonLogger
-from controlplane.auth import validate_management_auth
 from conftest import BackendServer, build_tls_context, request_via_proxy
+from controlplane.auth import validate_management_auth
 from upgrade_proxy.service import UpgradeProxyService
 
 
@@ -98,7 +98,9 @@ async def test_upgrade_proxy_strict_mode_blocks_fallback(
 
 
 @pytest.mark.asyncio
-async def test_upgrade_proxy_rejects_oversized_headers(temp_settings, tmp_path: Path) -> None:
+async def test_upgrade_proxy_rejects_oversized_headers(
+    temp_settings, tmp_path: Path
+) -> None:
     logger = JsonLogger(tmp_path / "oversized.jsonl")
     runtime_state = {"ready": True, "metrics": {}, "components": {}}
     service = UpgradeProxyService(
@@ -108,7 +110,9 @@ async def test_upgrade_proxy_rejects_oversized_headers(temp_settings, tmp_path: 
     )
     server = await service.start()
     try:
-        reader, writer = await asyncio.open_connection("127.0.0.1", temp_settings.upgrade_proxy_port)
+        reader, writer = await asyncio.open_connection(
+            "127.0.0.1", temp_settings.upgrade_proxy_port
+        )
         writer.write(
             b"GET http://example.test/ HTTP/1.1\r\nHost: example.test\r\nX-Fill: "
             + (b"a" * 256)
@@ -136,7 +140,9 @@ async def test_upgrade_proxy_times_out_slow_headers(temp_settings, tmp_path: Pat
     )
     server = await service.start()
     try:
-        reader, writer = await asyncio.open_connection("127.0.0.1", temp_settings.upgrade_proxy_port)
+        reader, writer = await asyncio.open_connection(
+            "127.0.0.1", temp_settings.upgrade_proxy_port
+        )
         writer.write(b"GET http://example.test/ HTTP/1.1\r\n")
         await writer.drain()
         await asyncio.sleep(0.1)
@@ -151,6 +157,8 @@ async def test_upgrade_proxy_times_out_slow_headers(temp_settings, tmp_path: Pat
 
 
 def test_weak_dashboard_password_rejected_outside_simulation(temp_settings) -> None:
-    secured = temp_settings.model_copy(update={"simulation_mode": False, "dashboard_password": "changeme"})
+    secured = temp_settings.model_copy(
+        update={"simulation_mode": False, "dashboard_password": "changeme"}
+    )
     with pytest.raises(RuntimeError):
         validate_management_auth(secured)

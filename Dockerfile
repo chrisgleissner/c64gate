@@ -14,7 +14,9 @@ RUN case "${TARGETARCH}" in \
     esac \
     && curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_checksums.txt" -o /tmp/caddy-checksums.txt \
     && curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_${CADDY_ARCH}.tar.gz" -o /tmp/caddy.tgz \
-    && grep "caddy_${CADDY_VERSION}_linux_${CADDY_ARCH}.tar.gz" /tmp/caddy-checksums.txt | sha256sum -c - \
+    && grep "caddy_${CADDY_VERSION}_linux_${CADDY_ARCH}.tar.gz" /tmp/caddy-checksums.txt > /tmp/caddy-checksum.txt \
+    && sha512sum /tmp/caddy.tgz | cut -d ' ' -f 1 > /tmp/caddy.tgz.sha512 \
+    && cut -d ' ' -f 1 /tmp/caddy-checksum.txt | diff -u - /tmp/caddy.tgz.sha512 \
     && tar -xzf /tmp/caddy.tgz -C /tmp \
     && install -m 0755 /tmp/caddy /usr/local/bin/caddy
 

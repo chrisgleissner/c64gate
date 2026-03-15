@@ -1,23 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
+import stat
 import subprocess
 from contextlib import suppress
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import uvicorn
 
+from common.capture import build_capture_plan
 from common.config_renderers import (
     render_caddyfile,
     render_dnsmasq_config,
     render_nftables_ruleset,
     render_proftpd_config,
 )
-from common.capture import build_capture_plan
 from common.logging import JsonLogger
 from common.settings import Settings, get_settings
 from controlplane.app import create_app
@@ -37,6 +40,52 @@ MANDATORY_BINARIES = [
 MANDATORY_COMPONENTS = ["nftables", "dnsmasq", "proftpd", "dumpcap", "upgrade_proxy", "caddy"]
 
 
+def should_start_simulated_rest_backend(settings: Settings) -> bool:
+    if not settings.simulation_mode:
+        return False
+    split = urlsplit(settings.rest_backend_url)
+    return split.scheme == "http" and (split.hostname in {"127.0.0.1", "localhost"})
+
+
+async def handle_simulated_rest_backend(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+) -> None:
+    payload = {"device": "c64u-sim", "version": "0.0.1", "transport": "https-relay"}
+    body = json.dumps(payload, sort_keys=True).encode("utf-8")
+    status = b"200 OK"
+    try:
+        request = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=2.0)
+        request_line = request.splitlines()[0].decode("ascii", errors="replace")
+        method, path, _ = request_line.split(" ", 2)
+        if method != "GET" or path not in {"/api/version", "/api/v1/info"}:
+            status = b"404 Not Found"
+            body = json.dumps({"detail": "not found"}).encode("utf-8")
+    except (TimeoutError, asyncio.IncompleteReadError, ValueError):
+        status = b"400 Bad Request"
+        body = json.dumps({"detail": "bad request"}).encode("utf-8")
+    response = b"".join(
+        [
+            b"HTTP/1.1 ",
+            status,
+            b"\r\nContent-Type: application/json\r\n",
+            f"Content-Length: {len(body)}".encode("ascii"),
+            b"\r\nConnection: close\r\n\r\n",
+            body,
+        ]
+    )
+    writer.write(response)
+    await writer.drain()
+    writer.close()
+    await writer.wait_closed()
+
+
+async def start_simulated_rest_backend(settings: Settings) -> asyncio.AbstractServer:
+    split = urlsplit(settings.rest_backend_url)
+    host = split.hostname or "127.0.0.1"
+    port = split.port or 80
+    return await asyncio.start_server(handle_simulated_rest_backend, host=host, port=port)
+
+
 def _drop_privileges_preexec() -> None:
     import pwd
 
@@ -46,8 +95,18 @@ def _drop_privileges_preexec() -> None:
     os.setuid(account.pw_uid)
 
 
+def _service_account_ids() -> tuple[int, int]:
+    import pwd
+
+    account = pwd.getpwnam("c64gate")
+    return account.pw_uid, account.pw_gid
+
+
 def start_managed_process(
-    command: list[str], name: str, drop_privileges: bool = False, extra_env: dict[str, str] | None = None
+    command: list[str],
+    name: str,
+    drop_privileges: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.Popen[str]:
     process = subprocess.Popen(
         command,
@@ -77,16 +136,34 @@ def ensure_runtime_layout(settings: Settings) -> None:
     for path in secure_paths + runtime_paths:
         Path(path).mkdir(parents=True, exist_ok=True)
     if os.geteuid() == 0:
-        import pwd
-
-        account = pwd.getpwnam("c64gate")
-        os.chown(settings.log_dir, account.pw_uid, account.pw_gid)
-        os.chown(settings.caddy_data_dir, account.pw_uid, account.pw_gid)
+        service_uid, service_gid = _service_account_ids()
+        for path in [settings.log_dir, settings.caddy_data_dir]:
+            try:
+                os.chown(path, service_uid, service_gid)
+            except PermissionError:
+                pass
     os.chmod(settings.log_dir, 0o750)
     os.chmod(settings.pcap_dir, 0o750)
     os.chmod(settings.caddy_data_dir, 0o700)
     (Path(settings.runtime_dir) / "tls").mkdir(parents=True, exist_ok=True)
     (Path(settings.runtime_dir) / "proxy").mkdir(parents=True, exist_ok=True)
+
+
+def can_drop_privileges_to_service_user(*paths: Path) -> bool:
+    if os.geteuid() != 0:
+        return False
+    service_uid, service_gid = _service_account_ids()
+    for path in paths:
+        metadata = path.stat()
+        mode = metadata.st_mode
+        if metadata.st_uid == service_uid and mode & stat.S_IWUSR and mode & stat.S_IXUSR:
+            continue
+        if metadata.st_gid == service_gid and mode & stat.S_IWGRP and mode & stat.S_IXGRP:
+            continue
+        if mode & stat.S_IWOTH and mode & stat.S_IXOTH:
+            continue
+        return False
+    return True
 
 
 def ensure_runtime_credentials(settings: Settings) -> None:
@@ -243,7 +320,13 @@ async def monitor_processes(
     while True:
         for name, process in managed_processes.items():
             healthy = process.poll() is None
-            update_component_state(runtime_state, name, running=healthy, healthy=healthy, required=True)
+            update_component_state(
+                runtime_state,
+                name,
+                running=healthy,
+                healthy=healthy,
+                required=True,
+            )
             if not healthy:
                 server.should_exit = True
                 return
@@ -267,15 +350,30 @@ async def serve() -> None:
     upgrade_proxy = UpgradeProxyService(
         settings=settings, logger=logger, runtime_state=runtime_state
     )
+    simulated_backend_server: asyncio.AbstractServer | None = None
+    if should_start_simulated_rest_backend(settings):
+        simulated_backend_server = await start_simulated_rest_backend(settings)
+        update_component_state(
+            runtime_state,
+            "rest_backend_simulation",
+            running=True,
+            healthy=True,
+            required=False,
+        )
     proxy_server = await upgrade_proxy.start()
-    update_component_state(runtime_state, "upgrade_proxy", running=True, healthy=True, required=True)
+    update_component_state(
+        runtime_state,
+        "upgrade_proxy",
+        running=True,
+        healthy=True,
+        required=True,
+    )
 
     dnsmasq_process = start_managed_process(
         [
             "dnsmasq",
             "--keep-in-foreground",
-            "--conf-file",
-            str(Path(settings.config_output_dir) / "dnsmasq.conf"),
+            f"--conf-file={Path(settings.config_output_dir) / 'dnsmasq.conf'}",
         ],
         name="dnsmasq",
     )
@@ -283,7 +381,14 @@ async def serve() -> None:
         ["proftpd", "-n", "-c", str(Path(settings.config_output_dir) / "proftpd.conf")],
         name="proftpd",
     )
-    dumpcap_process = start_managed_process(build_capture_plan(settings).dumpcap_command, name="dumpcap")
+    dumpcap_process = start_managed_process(
+        build_capture_plan(settings).dumpcap_command,
+        name="dumpcap",
+    )
+    drop_caddy_privileges = can_drop_privileges_to_service_user(
+        settings.log_dir,
+        settings.caddy_data_dir,
+    )
     caddy_process = start_managed_process(
         [
             "caddy",
@@ -294,7 +399,7 @@ async def serve() -> None:
             "caddyfile",
         ],
         name="caddy",
-        drop_privileges=True,
+        drop_privileges=drop_caddy_privileges,
         extra_env={"XDG_DATA_HOME": str(settings.caddy_data_dir.parent)},
     )
     managed_processes = {
@@ -304,7 +409,18 @@ async def serve() -> None:
         "caddy": caddy_process,
     }
     for component_name in managed_processes:
-        update_component_state(runtime_state, component_name, running=True, healthy=True, required=True)
+        update_component_state(
+            runtime_state,
+            component_name,
+            running=True,
+            healthy=True,
+            required=True,
+        )
+    update_component_state(
+        runtime_state,
+        "caddy",
+        privilege_dropped=drop_caddy_privileges,
+    )
 
     uvicorn_config = uvicorn.Config(
         app,
@@ -320,7 +436,16 @@ async def serve() -> None:
         monitor_task.cancel()
         for process in managed_processes.values():
             stop_managed_process(process)
-        update_component_state(runtime_state, "upgrade_proxy", running=False, healthy=False, required=True)
+        update_component_state(
+            runtime_state,
+            "upgrade_proxy",
+            running=False,
+            healthy=False,
+            required=True,
+        )
+        if simulated_backend_server is not None:
+            simulated_backend_server.close()
+            await simulated_backend_server.wait_closed()
         proxy_server.close()
         await proxy_server.wait_closed()
         await upgrade_proxy.client.aclose()
