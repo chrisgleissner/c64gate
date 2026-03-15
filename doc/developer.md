@@ -28,6 +28,22 @@ source .venv/bin/activate
 - `./build image`: build the production Docker image locally
 - `./build ci`: run the local CI-equivalent workflow
 
+## Host HTTPS On 443
+
+If you want rootless Docker to publish `443` for a normal `https://127.0.0.1/...` entry point, the host needs one-time preparation:
+
+```bash
+sudo ./scripts/setup-host-https.sh
+```
+
+That script lowers `net.ipv4.ip_unprivileged_port_start` to `443` and installs `libnss3-tools` so Chrome trust can be updated without making the c64gate container run as root.
+
+After the stack has started once and generated the Caddy local CA, trust it for Chrome and other NSS consumers with:
+
+```bash
+./scripts/trust-caddy-local-ca.sh
+```
+
 ## Linux Runtime Notes
 
 - The runtime is Linux-only by design.

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
 
     log_dir: Path = Path("/var/lib/c64gate/logs")
     pcap_dir: Path = Path("/var/lib/c64gate/pcap")
+    caddy_data_dir: Path = Path("/var/lib/c64gate/caddy")
     runtime_dir: Path = Path("/run/c64gate")
     config_output_dir: Path = Path("/run/c64gate/config")
     capture_interface: str = "any"

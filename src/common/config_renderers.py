@@ -86,19 +86,24 @@ def render_nftables_ruleset(settings: Settings) -> str:
 def render_caddyfile(settings: Settings) -> str:
     rest_backend = settings.rest_backend_url.removeprefix("http://").removeprefix("https://")
     dashboard_hash = "$2a$14$WoPzc0w1YbG5ChT1YVn/4e7lQnUnxE27XGr0C.csMEY0S8NxVkg4m"
+    addresses = ", ".join(
+        f"https://{address}" for address in dict.fromkeys(["127.0.0.1", "localhost", settings.hostname])
+    )
     return (
         dedent(
             f"""
         {{
             admin off
+            https_port 8443
             log {{
                 output file {settings.log_dir}/caddy-access.jsonl
                 format json
             }}
+            local_certs
         }}
 
-        :8443 {{
-            tls /run/c64gate/tls/test-cert.pem /run/c64gate/tls/test-key.pem
+        {addresses} {{
+            tls internal
             handle_path /api/* {{
                 reverse_proxy {rest_backend} {{
                     header_up X-Forwarded-Proto https

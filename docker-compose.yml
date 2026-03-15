@@ -21,5 +21,6 @@ services:
       - "2121:2121"
       - "8081:8081"
     volumes:
+      - ./data/caddy:/var/lib/c64gate/caddy
       - ./data/logs:/var/lib/c64gate/logs
       - ./data/pcap:/var/lib/c64gate/pcap

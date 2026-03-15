@@ -63,6 +63,16 @@ Useful endpoints after startup:
 
 If you want host port `443` instead of `8443`, set `C64GATE_HTTPS_HOST_PORT=443` before starting Compose. On rootless Docker hosts, publishing `443` may require lowering `net.ipv4.ip_unprivileged_port_start` or using a rootful Docker daemon.
 
+For a normal `https://127.0.0.1/...` experience in Chrome without certificate warnings, use the project helper scripts:
+
+```bash
+sudo ./scripts/setup-host-https.sh
+C64GATE_HTTPS_HOST_PORT=443 C64GATE_REST_BACKEND_URL=http://192.168.1.167 docker compose up -d --build
+./scripts/trust-caddy-local-ca.sh
+```
+
+This keeps Docker rootless, keeps the container itself unprivileged, and applies the minimum host changes needed for a conventional local HTTPS entry point.
+
 Stop the stack:
 
 ```bash

@@ -31,6 +31,15 @@ def start_managed_process(command: list[str], name: str) -> subprocess.Popen[str
     return process
 
 
+def start_managed_process_with_env(
+    command: list[str], name: str, extra_env: dict[str, str]
+) -> subprocess.Popen[str]:
+    process = subprocess.Popen(command, text=True, env={**os.environ, **extra_env})
+    if process.poll() is not None:
+        raise RuntimeError(f"failed to start {name}")
+    return process
+
+
 def stop_managed_process(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
@@ -46,6 +55,7 @@ def ensure_runtime_layout(settings: Settings) -> None:
     for path in [
         settings.log_dir,
         settings.pcap_dir,
+        settings.caddy_data_dir,
         settings.runtime_dir,
         settings.config_output_dir,
     ]:
@@ -156,7 +166,7 @@ async def serve() -> None:
         settings=settings, logger=logger, runtime_state=runtime_state
     )
     proxy_server = await upgrade_proxy.start()
-    caddy_process = start_managed_process(
+    caddy_process = start_managed_process_with_env(
         [
             "caddy",
             "run",
@@ -166,6 +176,7 @@ async def serve() -> None:
             "caddyfile",
         ],
         name="caddy",
+        extra_env={"XDG_DATA_HOME": str(settings.caddy_data_dir.parent)},
     )
     runtime_state["components"].setdefault("caddy", {}).update({"running": True})
 

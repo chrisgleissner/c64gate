@@ -12,6 +12,7 @@ coverage.xml
 dist/
 build/
 artifacts/
+data/caddy/
 data/logs/*.jsonl
 data/pcap/*.pcap
 data/pcap/*.pcapng
