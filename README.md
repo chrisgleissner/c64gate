@@ -49,10 +49,17 @@ Start the stack:
 docker compose up --build
 ```
 
+To proxy a real C64 REST API instead of the default local simulation target, set `C64GATE_REST_BACKEND_URL` to the device's plain HTTP endpoint before starting Compose. Example:
+
+```bash
+C64GATE_REST_BACKEND_URL=http://192.168.1.167 docker compose up --build
+```
+
 Useful endpoints after startup:
 
 - `http://127.0.0.1:8081/health`
 - `http://127.0.0.1:8081/ready`
+- `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
 
 Stop the stack:
 

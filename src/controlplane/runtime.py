@@ -24,6 +24,24 @@ from upgrade_proxy.service import UpgradeProxyService
 MANDATORY_BINARIES = ["nft", "dnsmasq", "caddy", "proftpd", "dumpcap", "tshark", "capinfos"]
 
 
+def start_managed_process(command: list[str], name: str) -> subprocess.Popen[str]:
+    process = subprocess.Popen(command, text=True)
+    if process.poll() is not None:
+        raise RuntimeError(f"failed to start {name}")
+    return process
+
+
+def stop_managed_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
 def ensure_runtime_layout(settings: Settings) -> None:
     for path in [
         settings.log_dir,
@@ -112,6 +130,18 @@ async def serve() -> None:
         settings=settings, logger=logger, runtime_state=runtime_state
     )
     proxy_server = await upgrade_proxy.start()
+    caddy_process = start_managed_process(
+        [
+            "caddy",
+            "run",
+            "--config",
+            str(Path(settings.config_output_dir) / "Caddyfile"),
+            "--adapter",
+            "caddyfile",
+        ],
+        name="caddy",
+    )
+    runtime_state["components"].setdefault("caddy", {}).update({"running": True})
 
     uvicorn_config = uvicorn.Config(
         app,
@@ -123,8 +153,11 @@ async def serve() -> None:
     try:
         await server.serve()
     finally:
+        runtime_state["components"].setdefault("caddy", {}).update({"running": False})
+        stop_managed_process(caddy_process)
         proxy_server.close()
         await proxy_server.wait_closed()
+        await upgrade_proxy.client.aclose()
 
 
 def main() -> None:

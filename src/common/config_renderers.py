@@ -95,11 +95,10 @@ def render_caddyfile(settings: Settings) -> str:
                 output file {settings.log_dir}/caddy-access.jsonl
                 format json
             }}
-            local_certs
         }}
 
         :8443 {{
-            tls internal
+            tls /run/c64gate/tls/test-cert.pem /run/c64gate/tls/test-key.pem
             handle_path /api/* {{
                 reverse_proxy {rest_backend} {{
                     header_up X-Forwarded-Proto https
