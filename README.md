@@ -2,7 +2,7 @@
 
 # C64 Gate
 
-C64 Gate is a Linux gateway for Commodore 64 Ultimate devices, packaged as a single Docker image 
+C64 Gate is a Linux gateway for Commodore 64 Ultimate devices, packaged as a single Docker image
 
 It sits between the device and the rest of the network, secures inbound and outbound traffic via TLS, and gives you packet capture, structured logs, and a small control plane.
 
@@ -68,8 +68,8 @@ If you only want a quick proof that the project works, the shortest useful path 
 
 1. Install Docker on a Linux machine.
 2. Run `docker compose up --build` in this repository.
-3. Open `https://127.0.0.1:8443/health` with the configured dashboard credentials and confirm the service answers.
-4. Open `https://127.0.0.1:8443/ready` with the configured dashboard credentials and inspect the runtime status.
+3. Open `https://127.0.0.1:8443/v1/version` and confirm you get a JSON response from the HTTPS relay.
+4. If you also want management status, open `https://127.0.0.1:8443/health` and `https://127.0.0.1:8443/ready` with the configured dashboard credentials.
 
 That path uses the same production image the tests validate. By default, the Compose setup runs in simulation mode so you can explore the system without attaching a real device or changing host networking more than necessary.
 
@@ -89,6 +89,16 @@ Start the stack:
 
 ```bash
 docker compose up --build
+```
+
+After that command starts successfully, the exact endpoint to hit first is:
+
+https://127.0.0.1:8443/v1/version
+
+That is the clearest end-to-end check that the HTTPS facade is up and the relayed REST path is working. In the default Compose simulation mode, it should return JSON shaped like:
+
+```json
+{"device":"c64u-sim","transport":"https-relay","version":"0.0.1"}
 ```
 
 Run a specific published image from GHCR locally:
@@ -145,10 +155,10 @@ C64GATE_REST_BACKEND_URL=http://192.168.1.167 docker compose up --build
 
 Useful endpoints after startup:
 
-- `https://127.0.0.1:8443/health`
-- `https://127.0.0.1:8443/ready`
-- `https://127.0.0.1:8443/v1/version` for the relayed device version endpoint
-- `https://127.0.0.1:8443/api/v1/info` for the HTTPS REST facade
+- `https://127.0.0.1:8443/v1/version` is the first endpoint to test after `docker compose up --build`
+- `https://127.0.0.1:8443/api/v1/info` is the HTTPS REST facade information endpoint
+- `https://127.0.0.1:8443/health` is the authenticated liveness endpoint
+- `https://127.0.0.1:8443/ready` is the authenticated readiness endpoint
 
 Management access notes:
 
