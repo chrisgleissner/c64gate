@@ -91,6 +91,52 @@ Start the stack:
 docker compose up --build
 ```
 
+Run a specific published image from GHCR locally:
+
+```bash
+mkdir -p data/caddy data/logs data/pcap
+chmod 0777 data/caddy data/logs data/pcap
+
+docker run -d \
+  --name c64gate-ghcr \
+  --cap-drop ALL \
+  --cap-add NET_ADMIN \
+  --cap-add NET_RAW \
+  --read-only \
+  --tmpfs /run \
+  --tmpfs /tmp \
+  -e C64GATE_SIMULATION_MODE=1 \
+  -e C64GATE_DASHBOARD_PASSWORD=changeme \
+  -p 127.0.0.1:8443:8443 \
+  -v "$PWD/data/caddy:/var/lib/c64gate/caddy" \
+  -v "$PWD/data/logs:/var/lib/c64gate/logs" \
+  -v "$PWD/data/pcap:/var/lib/c64gate/pcap" \
+  ghcr.io/chrisgleissner/c64gate:0.0.1
+```
+
+If you want the published image to front a real C64 REST endpoint instead of the simulation target, set `C64GATE_SIMULATION_MODE=0` and provide `C64GATE_REST_BACKEND_URL=http://<c64u-ip>`.
+
+### Required Hardware Setup
+
+The C64 Ultimate must not have any direct network path to your normal LAN or the Internet. If it does, the gateway cannot guarantee that all outbound traffic is inspected and upgraded through C64 Gate.
+
+To guarantee that all outbound traffic flows through the gate:
+
+1. Disable Wi-Fi on the C64 Ultimate.
+2. Connect the C64 Ultimate by Ethernet only to the gateway host's device-side network.
+3. Ensure the gateway host has a separate uplink path to the outside network.
+4. Make the C64 Ultimate receive its IP configuration and default gateway from C64 Gate.
+5. Do not connect the C64 Ultimate to any other switch, Wi-Fi, or routed segment in parallel.
+
+Two practical hardware topologies are recommended:
+
+1. Raspberry Pi gateway:
+    Use one Ethernet interface on the Pi for the C64U device-side link and use the Pi's Wi-Fi or a second Ethernet adapter as the uplink. The C64U should be connected only to the Pi-facing Ethernet segment.
+2. PC with two network interfaces:
+    Use one NIC for the isolated C64U-facing network and a second NIC for the uplink to your normal LAN or Internet. Do not bridge those interfaces outside the gateway runtime.
+
+In both setups, the important property is the same: the C64U has exactly one physical path off-device, and that path terminates at the C64 Gate host.
+
 To proxy a real C64 REST API instead of the default local simulation target, set `C64GATE_REST_BACKEND_URL` to the device's plain HTTP endpoint before starting Compose. Example:
 
 ```bash
